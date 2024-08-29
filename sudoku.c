@@ -4,7 +4,7 @@
 
 #define PUZZLE_ROWS 9
 #define PUZZLE_COLS 9
-#define PUZZLE_SIZE 81
+#define PUZZLE_SIZE PUZZLE_ROWS*PUZZLE_COLS
 
 #define ANSII_BLUE_BG "\033[44m"
 #define ANSII_RED_BG "\033[41m"
@@ -19,13 +19,13 @@ typedef struct sudoku_cell_t
     bool empty;
 } sudoku_cell_t;
 
-sudoku_cell_t *get_cell(sudoku_cell_t *puzzle, int row, int column)
+sudoku_cell_t *get_cell(sudoku_cell_t *puzzle, unsigned int row, unsigned int column)
 {
     sudoku_cell_t *cell = &puzzle[row * PUZZLE_COLS + column];
     return cell;
 }
 
-void set_cell(sudoku_cell_t *puzzle, int row, int column, bool predefined, bool sure, char c)
+void set_cell(sudoku_cell_t *puzzle, unsigned int row, unsigned int column, bool predefined, bool sure, char c)
 {
     sudoku_cell_t *cell = get_cell(puzzle, row, column);
     cell->predefined = predefined;
@@ -33,36 +33,36 @@ void set_cell(sudoku_cell_t *puzzle, int row, int column, bool predefined, bool 
     cell->c = c;
     cell->empty = c == 0;
 }
-void set_cellc(sudoku_cell_t *puzzle, char column, int row, bool predefined, bool sure, char c)
+void set_cellc(sudoku_cell_t *puzzle, char column, unsigned int row, bool predefined, bool sure, char c)
 {
-    int irow = row - 1;
-    int icol = column - 65;
+    unsigned int irow = row - 1;
+    unsigned int icol = column - 65;
     set_cell(puzzle, irow, icol, predefined, sure, c);
 }
-void set_predefinedc(sudoku_cell_t *puzzle, char row, int column, char c)
+void set_predefinedc(sudoku_cell_t *puzzle, char row, unsigned int column, char c)
 {
     set_cellc(puzzle, row, column, true, true, c);
 }
-void set_sure(sudoku_cell_t *puzzle, char row, int column, char c)
+void set_sure(sudoku_cell_t *puzzle, char row, unsigned int column, char c)
 {
     set_cell(puzzle, row, column, false, true, c);
 }
-void set_guess(sudoku_cell_t *puzzle, char row, int column, char c)
+void set_guess(sudoku_cell_t *puzzle, char row, unsigned int column, char c)
 {
     set_cell(puzzle, row, column, false, false, c);
 }
-void set_guessc(sudoku_cell_t *puzzle, char row, int column, char c)
+void set_guessc(sudoku_cell_t *puzzle, char row, unsigned int column, char c)
 {
     set_cellc(puzzle, row, column, false, false, c);
 }
-void set_zero(sudoku_cell_t *puzzle, char row, int column)
+void set_zero(sudoku_cell_t *puzzle, char row, unsigned int column)
 {
     set_cellc(puzzle, row, column, false, false, 0);
 }
 
-void init_puzzle(sudoku_cell_t *puzzle, int rows, int cols)
+void init_puzzle(sudoku_cell_t *puzzle, unsigned int rows, unsigned int cols)
 {
-    for (int i = 0; i < rows * cols; i++)
+    for (unsigned int i = 0; i < rows * cols; i++)
     {
         puzzle[i].c = 0;
         puzzle[i].empty = true;
@@ -93,11 +93,11 @@ void draw_cell(sudoku_cell_t *cell)
     printf("%s", ANSII_CLEAR);
 }
 
-void draw_puzzle(sudoku_cell_t *puzzle, int rows, int cols)
+void draw_puzzle(sudoku_cell_t *puzzle, unsigned int rows, unsigned int cols)
 {
-    for (int i = 0; i < cols; i++)
+    for (unsigned int i = 0; i < cols; i++)
     {
-        for (int j = 0; j < rows; j++)
+        for (unsigned int j = 0; j < rows; j++)
         {
 
             sudoku_cell_t *cell = &puzzle[i * cols + j];
@@ -107,38 +107,38 @@ void draw_puzzle(sudoku_cell_t *puzzle, int rows, int cols)
     }
 }
 
-sudoku_cell_t *get_col(sudoku_cell_t *puzzle, int rows, int col)
+sudoku_cell_t *get_col(sudoku_cell_t *puzzle, unsigned int rows, unsigned int col)
 {
     static sudoku_cell_t box[4096];
-    for (int i = 0; i < rows; i++)
+    for (unsigned int i = 0; i < rows; i++)
     {
         box[i] = *get_cell(puzzle, i, col);
     }
     return box;
 }
 
-sudoku_cell_t *get_row(sudoku_cell_t *puzzle, int cols, int row)
+sudoku_cell_t *get_row(sudoku_cell_t *puzzle, unsigned int cols, unsigned int row)
 {
     static sudoku_cell_t box[4096];
-    for (int i = 0; i < cols; i++)
+    for (unsigned int i = 0; i < cols; i++)
     {
         box[i] = *get_cell(puzzle, row, i);
     }
     return box;
 }
 
-sudoku_cell_t *get_box(sudoku_cell_t *puzzle, int rows, int cols, int row, int col)
+sudoku_cell_t *get_box(sudoku_cell_t *puzzle, unsigned int rows, unsigned int cols, unsigned int row, unsigned int col)
 {
-    int col_box_column = col / 3;
+    unsigned int col_box_column = col / 3;
 
-    int row_box_row = row / 3;
+    unsigned int row_box_row = row / 3;
 
     static sudoku_cell_t box[4096];
-    int counter = 0;
+    unsigned int counter = 0;
 
-    for (int i = row_box_row * (rows / 3); i < (row_box_row * rows / 3) + (rows / 3); i++)
+    for (unsigned int i = row_box_row * (rows / 3); i < (row_box_row * rows / 3) + (rows / 3); i++)
     {
-        for (int j = col_box_column * (cols / 3); j < (col_box_column * cols / 3) + (cols / 3); j++)
+        for (unsigned int j = col_box_column * (cols / 3); j < (col_box_column * cols / 3) + (cols / 3); j++)
         {
             box[counter] = *get_cell(puzzle, i, j);
             counter++;
@@ -147,30 +147,30 @@ sudoku_cell_t *get_box(sudoku_cell_t *puzzle, int rows, int cols, int row, int c
     return box;
 }
 
-int *get_options(sudoku_cell_t *puzzle, int rows, int cols, int row, int col)
+unsigned int *get_options(sudoku_cell_t *puzzle, unsigned int rows, unsigned int cols, unsigned int row, unsigned int col)
 {
-    static int options[4096];
+    static unsigned int options[4096];
     memset(options, 0, sizeof(options));
-    for (int i = 0; i < cols; i++)
+    for (unsigned int i = 0; i < cols; i++)
     {
         options[i] = true;
     }
-    for (int i = 0; i < cols; i++)
+    for (unsigned int i = 0; i < cols; i++)
     {
         sudoku_cell_t *c = get_col(puzzle, rows, col);
-        for (int j = 0; j < cols; j++)
+        for (unsigned int j = 0; j < cols; j++)
         {
             if (!c[j].empty)
                 options[c[i].c - '0' - 1] = false;
         }
         c = get_row(puzzle, cols, row);
-        for (int j = 0; j < cols; j++)
+        for (unsigned int j = 0; j < cols; j++)
         {
             if (!c[j].empty)
                 options[c[j].c - '0' - 1] = false;
         }
         c = get_box(puzzle, rows, cols, row, col);
-        for (int j = 0; j < cols * cols; j++)
+        for (unsigned int j = 0; j < cols * cols; j++)
         {
             if (!c[j].empty)
                 options[c[j].c - '0' - 1] = false;
@@ -179,11 +179,11 @@ int *get_options(sudoku_cell_t *puzzle, int rows, int cols, int row, int col)
     return options;
 }
 
-int get_option(int *options, int offset)
+unsigned int get_option(unsigned int *options, unsigned int offset)
 {
-    int result = 0;
-    int current_offset = 0;
-    for (int i = 0; i < PUZZLE_COLS; i++)
+    unsigned int result = 0;
+    unsigned int current_offset = 0;
+    for (unsigned int i = 0; i < PUZZLE_COLS; i++)
     {
         if (options[i])
         {
@@ -197,10 +197,10 @@ int get_option(int *options, int offset)
     return result;
 }
 
-int get_options_count(int *options)
+unsigned int get_options_count(unsigned int *options)
 {
-    int result = 0;
-    for (int i = 0; i < PUZZLE_COLS; i++)
+    unsigned int result = 0;
+    for (unsigned int i = 0; i < PUZZLE_COLS; i++)
     {
         if (options[i])
         {
@@ -210,18 +210,28 @@ int get_options_count(int *options)
     return result;
 }
 
-void set_sures(sudoku_cell_t *puzzle, int rows, int cols, int accuracy)
+unsigned int count_empty(sudoku_cell_t * puzzle, unsigned int size){
+    unsigned int count = 0;
+    for(unsigned int i = 0; i < size;i++){
+        if(puzzle[i].empty){
+            count++;
+        }
+    }
+    return count;
+}
+
+unsigned int set_sures(sudoku_cell_t *puzzle, unsigned int rows, unsigned int cols, unsigned int accuracy)
 {
 
-    for (int i = 0; i < rows; i++)
+    for (unsigned int i = 0; i < rows; i++)
     {
-        for (int j = 0; j < cols; j++)
+        for (unsigned int j = 0; j < cols; j++)
         {
             sudoku_cell_t *cell = get_cell(puzzle, i, j);
-            int *options = get_options(puzzle, rows, cols, i, j);
+            unsigned int *options = get_options(puzzle, rows, cols, i, j);
             if (cell->empty && get_options_count(options) == accuracy)
             {
-                int option = get_option(options, 0);
+                unsigned int option = get_option(options, 0);
                 if (accuracy > 1)
                 {
                     set_guess(puzzle, i, j, option + '0' + 1);
@@ -231,28 +241,34 @@ void set_sures(sudoku_cell_t *puzzle, int rows, int cols, int accuracy)
                     set_sure(puzzle, i, j, option + '0' + 1);
                 }
                 set_sures(puzzle, rows, cols, accuracy);
-                return;
+                return count_empty(puzzle,rows*cols);
             }
         }
     }
+    return count_empty(puzzle,rows*cols);
 }
 
-void solve(char *charpuzzle)
+unsigned int solve(char *charpuzzle)
 {
     sudoku_cell_t puzzle[PUZZLE_SIZE];
     init_puzzle(puzzle, PUZZLE_ROWS, PUZZLE_COLS);
-    for (int i = 0; i < PUZZLE_ROWS; i++)
+    for (unsigned int i = 0; i < PUZZLE_ROWS; i++)
     {
-        for (int j = 0; j < PUZZLE_COLS; j++)
+        for (unsigned int j = 0; j < PUZZLE_COLS; j++)
         {
             if (charpuzzle[j * PUZZLE_COLS + i] != ' ')
                 set_predefinedc(puzzle, i + 65, j + 1, charpuzzle[j * PUZZLE_COLS + i]);
         }
     }
     set_sures(puzzle, PUZZLE_ROWS, PUZZLE_COLS, 1);
-    set_sures(puzzle, PUZZLE_ROWS, PUZZLE_COLS, 2);
-    set_sures(puzzle, PUZZLE_ROWS, PUZZLE_COLS, 1);
+    unsigned int result = set_sures(puzzle, PUZZLE_ROWS, PUZZLE_COLS, 2);
+    if(result){
+        printf("Unresolved. %d cells left:\n",result);
+    }else{
+        printf("Succesfully resolved:\n");
+    }
     draw_puzzle(puzzle, PUZZLE_ROWS, PUZZLE_COLS);
+    return result;
 }
 
 int main()

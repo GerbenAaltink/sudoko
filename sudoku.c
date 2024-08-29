@@ -93,16 +93,6 @@ void draw_cell(sudoku_cell_t *cell)
     printf("%s", ANSII_CLEAR);
 }
 
-void draw_row(sudoku_cell_t *row, int cols)
-{
-    for (int i = 0; i < cols; i++)
-    {
-        sudoku_cell_t *cell = &row[i];
-        draw_cell(cell);
-    }
-    printf("\n");
-}
-
 void draw_puzzle(sudoku_cell_t *puzzle, int rows, int cols)
 {
     for (int i = 0; i < cols; i++)
@@ -222,30 +212,26 @@ int get_options_count(int *options)
 
 void set_sures(sudoku_cell_t *puzzle, int rows, int cols, int accuracy)
 {
-    bool result = true;
-    while (result)
+
+    for (int i = 0; i < rows; i++)
     {
-        result = false;
-        for (int i = 0; i < rows && !result; i++)
+        for (int j = 0; j < cols; j++)
         {
-            for (int j = 0; j < cols && !result; j++)
+            sudoku_cell_t *cell = get_cell(puzzle, i, j);
+            int *options = get_options(puzzle, rows, cols, i, j);
+            if (cell->empty && get_options_count(options) == accuracy)
             {
-                sudoku_cell_t *cell = get_cell(puzzle, i, j);
-                int *options = get_options(puzzle, rows, cols, i, j);
-                if (cell->empty && get_options_count(options) == accuracy)
+                int option = get_option(options, 0);
+                if (accuracy > 1)
                 {
-                    int option = get_option(options, 0);
-                    if (accuracy > 1)
-                    {
-                        set_guess(puzzle, i, j, option + '0' + 1);
-                    }
-                    else
-                    {
-                        set_sure(puzzle, i, j, option + '0' + 1);
-                    }
-                    result = true;
-                    break;
+                    set_guess(puzzle, i, j, option + '0' + 1);
                 }
+                else
+                {
+                    set_sure(puzzle, i, j, option + '0' + 1);
+                }
+                set_sures(puzzle, rows, cols, accuracy);
+                return;
             }
         }
     }
@@ -265,13 +251,12 @@ void solve(char *charpuzzle)
     }
     set_sures(puzzle, PUZZLE_ROWS, PUZZLE_COLS, 1);
     set_sures(puzzle, PUZZLE_ROWS, PUZZLE_COLS, 2);
-    
+    set_sures(puzzle, PUZZLE_ROWS, PUZZLE_COLS, 1);
     draw_puzzle(puzzle, PUZZLE_ROWS, PUZZLE_COLS);
 }
 
 int main()
 {
-
     solve(
         "913   5  "
         "6 7    24"
@@ -282,7 +267,6 @@ int main()
         " 4   19  "
         "7 6  9  5"
         "  1  64 7");
-
     printf("\n");
     solve(
         "5 3   7  "
@@ -295,26 +279,27 @@ int main()
         " 419    5"
         "   8   79");
     printf("\n");
-    solve(" 4  8 3  "
-          "  1 9   5"
-          "7   2 6  "
-          " 5  7   2"
-          "    4    "
-          "9   5  7 "
-          "  2 6   8"
-          "6   3  1 "
-          "  8 7  9 ");
+    solve(
+        " 4  8 3  "
+        "  1 9   5"
+        "7   2 6  "
+        " 5  7   2"
+        "    4    "
+        "9   5  7 "
+        "  2 6   8"
+        "6   3  1 "
+        "  8 7  9 ");
     printf("\n");
-    solve("  7429 8 "
-          "2    83  "
-          "896 351 4"
-          " 1   6 9 "
-          "7   1 2 6"
-          "6  973  1"
-          "       6 "
-          "5 8 9    "
-          "46 58  1 ");
-
+    solve(
+        "  7429 8 "
+        "2    83  "
+        "896 351 4"
+        " 1   6 9 "
+        "7   1 2 6"
+        "6  973  1"
+        "       6 "
+        "5 8 9    "
+        "46 58  1 ");
     printf("\n");
     solve(
         "2  5 74 6"

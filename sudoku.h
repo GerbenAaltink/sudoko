@@ -9,6 +9,7 @@ unsigned int rand_int(int min, int max){
     return rand() % (max - min + 1) + min;
 }
 
+
 unsigned int count_neighbors(int grid[N][N], int row, int col) {
     unsigned int count = 0;
     for(int i = 0; i < row; i++){
@@ -108,7 +109,7 @@ bool empty_spot_is_available(int grid[N][N]){
 
 unsigned int _solve(int grid[N][N], int * attempts, bool draw) {
     (*attempts)++;
-    int row, col;
+    unsigned int row, col;
     bool emptySpot = false;
 
     for (row = 0; row < N; row++) {
@@ -136,15 +137,15 @@ unsigned int _solve(int grid[N][N], int * attempts, bool draw) {
     }*/
 
     for (int num = 1; num <= 9; num++) {
-        unsigned int * easy_row = calloc(sizeof(int),1);
-        unsigned int * easy_col = calloc(sizeof(int), 1);
-        if(get_easiest_cell(grid,easy_row,easy_col)){
-            // row = *easy_row;
-             free(easy_row);
-            // col = *easy_col;
-             free(easy_col);
+        //unsigned int * easy_row = calloc(sizeof(int),1);
+        //unsigned int * easy_col = calloc(sizeof(int), 1);
+        //if(get_easiest_cell(grid,easy_row,easy_col)){
+        //     row = *easy_row;
+        //     free(easy_row);
+        //     col = *easy_col;
+        //     free(easy_col);
 
-        }
+        //}
         if (is_safe(grid, row, col, num)) {
             grid[row][col] = num;
             if(draw)
@@ -157,7 +158,7 @@ unsigned int _solve(int grid[N][N], int * attempts, bool draw) {
             grid[row][col] = 0;
         }
     }
-
+    
     return 0;
 }
 

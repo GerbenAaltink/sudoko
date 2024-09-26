@@ -6,7 +6,7 @@
 #include <pthread.h>
 #include "footer.h"
 
-unsigned int global_m_lock_count = 0;
+unsigned long long global_m_lock_count = 0;
 pthread_mutex_t * global_m_lock = NULL;
 
 #define WITH_MUTEX(src,update_footer) \
@@ -17,13 +17,11 @@ pthread_mutex_t * global_m_lock = NULL;
     pthread_mutex_lock(global_m_lock);    \
     global_m_lock_count++; \
     if(update_footer) { \
-    sprintf(footer_buffer,"l:%s:%d (%ld)",__func__,__LINE__,global_m_lock_count); \
-    set_footer_text(footer_buffer); \
+    footer_printf("l:%s:%d (%lld)",__func__,__LINE__,global_m_lock_count); \
     } \
       src \
      if(update_footer) { \
-    sprintf(footer_buffer,"u:%s:%d (%ld)",__func__,__LINE__,global_m_lock_count); \
-    set_footer_text(footer_buffer); \
+    footer_printf("u:%s:%d (%lld)",__func__,__LINE__,global_m_lock_count); \
     } \
     pthread_mutex_unlock(global_m_lock);
     
@@ -33,6 +31,7 @@ typedef struct thread_data_t {
     pthread_t thread;
     unsigned int complexity;
     unsigned int result_complexity;
+    
     unsigned int initial_count_minimum;
     unsigned int initial_count_maximum;
     unsigned int result_initial_count;
@@ -92,26 +91,28 @@ void grid_set_random_free_cells(int grid[N][N], unsigned int count){
 }
 
 
-int * grid_with_minimal_complexity(unsigned int complexity, unsigned int * result_complexity, unsigned int * initial_count){
+int * grid_with_minimal_complexity(thread_data_t * tdata){
     int * grid = grid_new();
     int * grid_game = NULL;
     while(true){
-        *initial_count = rand_int(1,36);
-        grid_set_random_free_cells(grid,*initial_count);
+        tdata->result_initial_count = rand_int(tdata->initial_count_minimum,tdata->initial_count_maximum);
+        grid_set_random_free_cells(grid,tdata->result_initial_count);
         //print_grid(grid,false);
         grid_game = grid_copy(grid);
-        char solving_text[1024] = {0};
-        sprintf(solving_text,"Solving: %ld", *result_complexity);
-        set_footer_text(solving_text);
-        *result_complexity = solve(grid,false);
-        if(*result_complexity >= complexity){
+        //footer_printf("Solving: %ld", tdata->result_initial_count);
+        tdata->result_complexity = solve(grid,false);
+        if(tdata->result_complexity == 0){
+            footer_printf("thread %d failed validation",tdata->id);
+        }else{
+            footer_printf("thread %d solved: %d",tdata->id, tdata->result_complexity);
+        }tdata->solution = grid;
+        if(tdata->result_complexity >= tdata->complexity){
             break;
         }else{
-            
+            free(grid_game);
             grid_reset(grid);
         }
     }
-    free(grid);
     return grid_game;
 }
 
@@ -125,9 +126,7 @@ void generate_game(thread_data_t * tdata){
 
 
 },false);
-       tdata->puzzle = grid_with_minimal_complexity( 
-tdata->complexity, &tdata->result_complexity, &tdata->result_initial_count);
-
+       tdata->puzzle = grid_with_minimal_complexity(tdata);
     WITH_MUTEX({
     tdata->finish = nsecs();
     tdata->duration = tdata->finish - tdata->start;
@@ -157,9 +156,8 @@ unsigned int generate_games(unsigned int game_count, unsigned int timeout, unsig
         sleep(1);
         WITH_MUTEX({
         nsecs_t time_elapsed = nsecs() - time_start;
-        char status_text[1024] = {0};
-        sprintf(status_text,"\rRunning %s",format_time(time_elapsed));
-        set_footer_text(status_text);
+        
+        footer_printf("main");
         //pthread_mutex_lock(&lock);
         for(int ithread = 0; ithread < game_count; ithread++){
             if(runners[ithread].is_done){
@@ -177,6 +175,9 @@ unsigned int generate_games(unsigned int game_count, unsigned int timeout, unsig
                 printf("Initial values: %ld\n",runners[ithread].result_initial_count);
                 runners[ithread].is_done = false;
                 free(runners[ithread].puzzle);
+                runners[ithread].puzzle = NULL;
+                free(runners[ithread].solution);
+                runners[ithread].solution = NULL;
                 printf("\n");
                 pthread_create(&runners[ithread].thread,NULL,generate_game,(void *)(&runners[ithread]));
             
@@ -195,12 +196,14 @@ unsigned int generate_games(unsigned int game_count, unsigned int timeout, unsig
 }
 
 int main() {
+
     srand(time(NULL));
    // setbuf(stdout,0);
     int cores = sysconf(_SC_NPROCESSORS_ONLN);
     int threads = cores - 1;
     sprintf(footer_prefix, "Cores: %d - Threads: %d - ", cores,threads);
-    generate_games(threads ,3600,100000);
+    // Highest: 1481563980
+    generate_games(threads ,3600,1);
     exit(0);
 
 /*
@@ -247,6 +250,18 @@ Thread 2 is done (1528.38s)
 Complexity: 748250144
 Initial values: 11
 */
+/*0 3 0 0 0 0 0 0 0 
+0 0 5 0 0 0 0 0 0 
+0 0 0 0 0 0 1 0 0 
+0 0 0 0 0 0 0 4 0 
+0 0 0 0 9 0 0 0 0 
+0 0 9 0 3 0 0 0 0 
+0 0 0 0 0 6 0 0 0 
+0 0 4 0 0 0 0 7 0 
+0 6 7 0 0 4 0 2 0 
+Thread 0 is done (2635.64s)
+Complexity: 1481563980
+Initial values: 14*/
 /*
 GROOTSTE!   
 Complexity: 774858414

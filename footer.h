@@ -1,19 +1,21 @@
+#ifndef FOOTER_H
+#define FOOTER_H
 #include <stdio.h>
 #include <unistd.h>
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <rlib.h>
 #include <pthread.h>
+#include <stdarg.h>
 
-pthread_mutex_t footer_mutex;
+static pthread_mutex_t footer_mutex;
 
-nsecs_t footer_time_start = 0;
+static nsecs_t footer_time_start = 0;
 
 char footer_prefix[1024] = {0};
-char footer_buffer[1024] = {0};
 char footer_suffix[1024] = {0};
 
-void get_terminal_size(int *rows, int *cols) {
+static void footer_get_terminal_size(int *rows, int *cols) {
     struct winsize w;
 
     // Use ioctl to get the terminal size
@@ -24,7 +26,7 @@ void get_terminal_size(int *rows, int *cols) {
         *cols = w.ws_col;
     }
 }
-void get_cursor_position(int *rows, int *cols) {
+void footer_get_cursor_position(int *rows, int *cols) {
     // Save the current terminal settings
     struct termios term, term_saved;
     tcgetattr(STDIN_FILENO, &term);
@@ -57,18 +59,13 @@ void get_cursor_position(int *rows, int *cols) {
     tcsetattr(STDIN_FILENO, TCSANOW, &term_saved);
 }
 
-void set_cursor_position(int row, int col) {
-    // Use ANSI escape code to set the cursor position
-    printf("\033[%d;%dH", row, col);
-    fflush(stdout); // Ensure the output is flushed to the terminal
-}
-void _set_footer(unsigned int row, unsigned int col_count, char * text,unsigned int original_row,unsigned int original_col) {
+void _footer_set(unsigned int row, unsigned int col_count, char * text,unsigned int original_row,unsigned int original_col) {
     char line[col_count];
     memset(line,' ',col_count);
     line[col_count - strlen(text)] = 0;
     printf("\033[%d;%dH%s%s\033[%ld;%ldH",row,0,text,line,original_row,original_col);
 }
-void set_footer_text(const char *text) {
+void footer_printf(const char *format, ...) {
     if(footer_time_start == 0)
     {
         // Quick, for the threads come a default value
@@ -78,17 +75,21 @@ void set_footer_text(const char *text) {
     }
     pthread_mutex_lock(&footer_mutex);
     nsecs_t time_elapsed = nsecs() - footer_time_start;
-
     int original_row = 0;
     int original_col = 0;
     int row_count = 0;
     int col_count = 0;
-    get_cursor_position(&original_row, &original_col);
-    get_terminal_size(&row_count, &col_count);
-    //set_cursor_position(row_count, 0);
+    footer_get_cursor_position(&original_row, &original_col);
+    footer_get_terminal_size(&row_count, &col_count);
+    char text[1024] = {0};
     char full_text[1024 * 3 + 1] = {0};
+    va_list args;
+    va_start(args, format);
+    vsprintf(text, format, args);
+    va_end(args);
     sprintf(full_text,"\rduration: %s - %s%s%s", format_time(time_elapsed), footer_prefix, text, footer_suffix);
-    _set_footer(row_count,col_count,full_text,original_row,original_col);
-    //memset(footer_buffer,0,sizeof(footer_buffer));
+    
+    _footer_set(row_count,col_count,full_text,original_row,original_col);
     pthread_mutex_unlock(&footer_mutex);
 }
+#endif

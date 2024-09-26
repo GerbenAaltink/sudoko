@@ -162,8 +162,10 @@ unsigned int generate_games(unsigned int game_count, unsigned int timeout, unsig
         for(int ithread = 0; ithread < game_count; ithread++){
             if(runners[ithread].is_done){
                 pthread_join(runners[ithread].thread,NULL);
-                printf("\r");
+                printf("\r\n");
                 print_grid(runners[ithread].puzzle,true);
+                printf("\n");
+                print_grid(runners[ithread].solution,false);
                 if(runners[ithread].result_complexity > highest_complexity){
                     highest_complexity = runners[ithread].result_complexity; 
                     for(int j = 0; j < game_count; j++){
@@ -200,10 +202,10 @@ int main() {
     srand(time(NULL));
    // setbuf(stdout,0);
     int cores = sysconf(_SC_NPROCESSORS_ONLN);
-    int threads = cores - 1;
+    int threads = cores * 4 - 1;
     sprintf(footer_prefix, "Cores: %d - Threads: %d - ", cores,threads);
     // Highest: 1481563980
-    generate_games(threads ,3600,1);
+    generate_games(threads ,13371337,1);
     exit(0);
 
 /*

@@ -2,8 +2,14 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
-#define N 9 
+#define ANSII_BLUE_BG "\033[34m"
+#define ANSII_RED_BG "\033[31m"
+#define ANSII_GREEN_BG "\033[32m"
+#define ANSII_CLEAR "\033[0m"
+
+#define N 9
 
 unsigned int rand_int(int min, int max){
     return rand() % (max - min + 1) + min;
@@ -13,11 +19,11 @@ unsigned int rand_int(int min, int max){
 unsigned int count_neighbors(int grid[N][N], int row, int col) {
     unsigned int count = 0;
     for(int i = 0; i < row; i++){
-        for(int j = 0; j < 9; j++){
+        for(int j = 0; j < N; j++){
             if(grid[row][j] != 0 && j != col)
                 count++;
         }
-        for(int j = 0; j < 9; j++){
+        for(int j = 0; j < N; j++){
             if(grid[j][col] != 0 && j != row)
                 count++;
         }
@@ -25,13 +31,35 @@ unsigned int count_neighbors(int grid[N][N], int row, int col) {
     return count;
 }
 
+void draw_cell(int c)
+{
+    if (c > 0 && c <= 3)
+    {
+        printf("%s", ANSII_BLUE_BG);
+    }
+    else if (c > 0 && c <= 6)
+    {
+        printf("%s", ANSII_GREEN_BG);
+    }
+    else if (c > 0 && c <= 9)
+    {
+        printf("%s", ANSII_RED_BG);
+    }
+    if(c){
+        printf("%s%d ", c > 9 ? "" :" ", c );
+    }else{
+        printf(" 0 ");
+    }    
+    printf("%s", ANSII_CLEAR);
+}
 
 void print_grid(int grid[N][N],bool clear) {
     if(clear)
         printf("\033[2J\033[H");
     for (int row = 0; row < N; row++) {
         for (int col = 0; col < N; col++) {
-            printf("%d ", grid[row][col]);
+            draw_cell(grid[row][col]);
+            ///printf("%d ", grid[row][col]);
         }
         printf("\n");
     }
@@ -53,9 +81,9 @@ bool is_safe(int grid[N][N], int row, int col, int num) {
     }
 
     // Check box
-    int startRow = row - row % 3, startCol = col - col % 3;
-    for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++) {
+    int startRow = row - row % (N / 3), startCol = col - col % (N / 3);
+    for (int i = 0; i < N / 3; i++) {
+        for (int j = 0; j < N / 3; j++) {
             if (grid[i + startRow][j + startCol] == num) {
                 return false;
             }
@@ -83,8 +111,11 @@ bool get_easiest_cell(int grid[N][N], unsigned int * easy_row, unsigned int * ea
     bool found = true;
     for(int row = 0; row < N; row++){
         for (int col = 0; col < N; col++){
+            if(grid[row][col] != 0){
+                continue;
+            }
             unsigned ncount = count_neighbors(grid,row,col);
-            if(easy_neighbor_count < ncount){
+            if(easy_neighbor_count <= ncount){
                 easy_neighbor_count = ncount;
                 *easy_row = row;
                 *easy_col = col;
@@ -107,7 +138,29 @@ bool empty_spot_is_available(int grid[N][N]){
     return false;
 }
 
-unsigned int _solve(int grid[N][N], int * attempts, bool draw) {
+unsigned int _solve(int grid[N][N], int *attempts, bool draw){
+    (*attempts)++;
+    unsigned int row, col;
+    if(!get_easiest_cell(grid,&row,&col)){
+        //print_grid(grid, false);
+        return attempts;
+    }
+    bool found = false;
+    for(int num = 1; num < N + 1; num++){
+        if(is_safe(grid,row,col,num)){
+            grid[row][col] = num;
+            //print_grid(grid,true);
+            if(_solve(grid,attempts,draw))
+            {
+                return *attempts;
+            }
+            grid[row][col] = 0;
+        }
+    }
+    return 0;
+}
+
+unsigned int _solve2(int grid[N][N], int * attempts, bool draw) {
     (*attempts)++;
     unsigned int row, col;
     bool emptySpot = false;
@@ -151,7 +204,7 @@ unsigned int _solve(int grid[N][N], int * attempts, bool draw) {
             if(draw)
                 print_grid(grid,true);
             
-            if (_solve(grid,attempts,draw)) {
+            if (_solve2(grid,attempts,draw)) {
                 return *attempts;
             }
 

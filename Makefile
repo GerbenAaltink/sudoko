@@ -4,6 +4,10 @@ build_and_run:
 	gcc sudoku2.c -o sudoku -Wall -Wextra -pedantic
 	./sudoku
 
+gen1:
+	gcc sudoku_gen1.c -o sudoku_gen1 -Wall -Wextra -pedantic -Ofast
+	./sudoku_gen1
+
 coverage:
 	gcc -pg -fprofile-arcs -ftest-coverage -g -o sudoku sudoku2.c
 	./sudoku

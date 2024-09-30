@@ -119,8 +119,10 @@ int * grid_with_minimal_complexity(thread_data_t * tdata){
 	//	free(tdata->solution);
 	
 
+	
+	WITH_MUTEX({
 	memcpy(tdata->solution,grid,N*N*sizeof(int));
-
+	},false);
         if(tdata->result_complexity >= tdata->complexity){
             break;
         }else{
@@ -132,7 +134,8 @@ int * grid_with_minimal_complexity(thread_data_t * tdata){
 }
 
 void generate_game(thread_data_t * tdata){
-    //unsigned int * result_complexity = (int *)calloc(sizeof(int),1);
+    tick();
+	//unsigned int * result_complexity = (int *)calloc(sizeof(int),1);
     //unsigned int * result_initial_count = (int *)calloc(sizeof(int),1);
     //rr_disable_stdout();
    
@@ -142,11 +145,12 @@ void generate_game(thread_data_t * tdata){
 		//free(tdata->puzzle);
 
 	//}
-
-		memcpy(tdata->puzzle,puzzle,N*N*sizeof(int));
+    WITH_MUTEX({
+    memcpy(tdata->puzzle,puzzle,N*N*sizeof(int));
     tdata->finish = nsecs();
     tdata->duration = tdata->finish - tdata->start;
     tdata->is_done = true;
+    },false);
 }
 
 
@@ -215,7 +219,7 @@ int request_handler_root(rhttp_request_t *r){
 		nsecs_t longest_running = 0;
 		get_totals(serve_arguments.runners, serve_arguments.runner_count, &steps_total, &solved_total, &longest_running);
 		char html[1024*1024*2] = {0};
-		sprintf(html, "<html><meta http-equiv=\"refresh\" content=\"1\"><head>"
+		sprintf(html, "<html><meta http-equiv=\"refresh\" content=\"5\"><head>"
 				"<body style=\"background-color:black;color:white;\"><pre>"
 				"%s"
 				"Started: %s\n"
@@ -339,8 +343,8 @@ unsigned int generate_games(unsigned int game_count, unsigned int timeout, unsig
     unsigned int highest_complexity = complexity;
     nsecs_t time_start = nsecs();
     for(unsigned int i = 0; i < timeout; i++){
-        sleep(1000);
-        WITH_MUTEX({
+	sleep(1);
+	WITH_MUTEX({
         nsecs_t time_elapsed = nsecs() - time_start;
         
         footer_printf("main");

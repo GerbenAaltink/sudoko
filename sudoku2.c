@@ -1,6 +1,5 @@
 #include "sudoku.h"
 
-#include <rlib.h>
 
 int main() {
     setbuf(stdout,0);
@@ -19,7 +18,7 @@ int main() {
     };
 
     RBENCH(1,{
-        unsigned int attempts = solve(grid);
+        unsigned int attempts = solve2(grid,false);
         if (!attempts) {
             printf("No solution exists\n");
         }

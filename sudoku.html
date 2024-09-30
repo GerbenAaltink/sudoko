@@ -11,6 +11,9 @@
 		<template id="template_sudoku_container">
 			<div class="width:640px;height:640px;text-size:26px;" class="container-content"></div>
 		</template>
+		<template id="template_sudoku_parser">
+			<div class="width:100%;height:100%" class="parser-content"></div>
+		</template>
 		<template id="template_sudoku_cell">
 			<div class="cell-content"></div>
 		</template>
@@ -38,7 +41,8 @@
 			const game_size = 9;
 			const container_template = document.getElementById('template_sudoku_container');
 			const cell_template = document.getElementById("template_sudoku_cell");
-			const app = document.getElementById('app'); //.importNode(container_template.content, true);
+			const sudokuParserTemplate = document.getElementById('template_sudoku_parser');
+			const container = document.getElementById('app'); //.importNode(container_template.content, true);
 			const _hashChars = "abcdefghijklmnopqrstuvwxyz\"':[]0123456789";
 			function hashString(str) {
 				let result = 0;
@@ -54,9 +58,31 @@
 				selectionCount = 0
 				_string = null
 				_hash = null
-				constructor(number){
-					this.number = number;
+				_json = null;
+				constructor(arg){
+					if(isNaN(arg)){
+						this.number = arg.number;
+						this.cells = arg.cells;
+						this.selectCount = arg.selectionCount;
+						this._hash = arg._hash;
+						this._json = arg;
+					}else{
+						this.number = arg;
+					}
 				}
+				toJson(){
+					if(this._json == null){
+					const json = {
+						number: this.number,
+						cells: this.cells,
+						selectionCount:this.selectionCount,
+						_hash:this.getHash()
+					};
+						this._json = json;
+					}
+					return this._json;
+				}
+				
 				getHash(){
 					if(this._hash == null){
 						let started = false;
@@ -94,6 +120,7 @@
 			class Cell {
 				row = 0;
 				col = 0;
+				initial = false;
 				letter = null
 				name = null
 				options = [];
@@ -122,16 +149,20 @@
 				
 
 				}
-				addNumber(number){
-					this.values.pop(number);
-					this.values.push(number);
-					this.value = Number(number);
+				addNumber(value){
+					this.values.pop(value);
+					this.values.push(value);
+					this.value = Number(value);
+					
+					this.element.textContent = this.value == 0 ? "" :  String(this.value);
 					this.validate();
 					//this.update();
-					this.element.textContent = this.number == 0 ? "" :  String(number);
+
+
 				}
 				onClick(){
 					//this.
+					if(!this.initial)
 					this.toggleSelect();
 					//this.app.onCellClick(this)
 				}
@@ -151,7 +182,7 @@
 							cell != _this && 
 							(cell.row == _this.row || cell.col == _this.col) && 
 							cell.value == _this.value;
-					}).length;
+					}).length; //&& !this.app.getBoxValues(this.name).indexOf(this.value) == -1);
 					return this.valid;
 				}
 				update(){
@@ -173,6 +204,9 @@
 					}
 					return this.valid;
 				}
+				destructor(){
+					//this.container.delete();
+				}
 				constructor(app,row,col){
 					this.app = app;
 					this.container = document.importNode(cell_template.content,true);
@@ -192,16 +226,17 @@
 					
 					this.element.addEventListener('mousemove', (e)=>{
 						
+						
 
-
-						if(e.buttons == 1)
+						if(!_this.initial && e.buttons == 1)
 							_this.select();
-						else if(e.buttons == 2)
+						else if(!_this.initial && e.buttons == 2)
 							_this.deSelect();
 						else
 							_this.app.pushState()
 
 					});
+
 					this.element.addEventListener('mouseexit', (e)=>{
 						if(!e.buttons){
 					//		_this.app.pushState();
@@ -209,18 +244,130 @@
 					});
 					this.element.addEventListener('contextmenu',(e)=>{
 						e.preventDefault();
-						if(_this.selected){
+						
+						if(!_this.initial && _this.selected){
 						_this.deSelect();
 						}else{
-							_this.app.deSelectAll();
+						 	_this.values.pop(_this.value);
+							_this.addNumber(0);
+							_this.deSelect();
+							_this.update();
+							//_this.app.deSelectAll();
 						}
 					});
+				}
+
+				redraw(){
+					
 				}
 				render(container){
 					container.appendChild(this.container);
 				}
 				toString(){
 					return `${this.row}:${this.col}`
+				}
+			}
+			class SudokuParser {
+				app = null
+				element = null
+				container = null
+				blank = true
+				content = ''
+				size = 9
+				constructor(app,container){
+					//this.container = container;
+					this.app = app;
+					this.container = document.importNode(sudokuParserTemplate.content,true);
+					this.element = document.createElement('div');
+					this.element.style.width = '90%';
+					this.element.style.height = '50%';
+					this.element.border = '1px solid #CCCCCC';
+					this.content = '';
+					this.cells = []
+					this.element.contentEditable = true;
+					this.element.textContent = 'Paste puzzle here';//this.container.querySelector('.parser-content');
+					this.toggle();
+					this.blank = true;
+					const _this = this;
+					this.element.addEventListener('click',(e)=>{
+						if(_this.blank)
+						_this.element.textContent = '';
+						_this.blank = false;
+
+					});
+					this.element.addEventListener('contextmenu',(e)=>{
+						if(_this.blank)
+						_this.element.textContent = '';
+						this.blank = false;
+					
+
+					});
+					this.element.addEventListener('input',(e)=>{
+						_this.element.innerHTML = this.element.textContent;
+						_this.parseAndApply();
+					});
+					this.element.addEventListener('keyup',(e)=>{
+						//_this.parseAndApply();
+					});
+					container.appendChild(this.element);
+				}	
+				parseAndApply(){
+					this.parse();
+					this.apply();
+				}
+				parse(){
+					const content = this.element.textContent;
+					const regex = /\d/g;
+					const matches = [...content.matchAll(regex)];
+					let row = 0;
+					let col = 0;
+					const cells = []
+					const max = this.size*this.size;
+					
+					matches.forEach(match => {
+						if(row*col == max){
+							return;
+						}
+						if(col == 9){
+						    row++;
+						    col = 0;
+						}
+						if(row == 9){
+						    row = 0;
+						    col = 0;
+						}
+					    const digit = match[0];
+					    const cell = new Cell(this.app,row,col);
+					    console.info(row,col);
+						cell.addNumber(digit);
+					    cell.initial = true;
+					    cells.push(cell);
+					    col++;
+					});
+					this.cells = cells;
+				}
+				apply(){
+					this.app.cells.forEach(cell=>{
+						cell.initial = false;
+						cell.number = 0;
+						cell.numbers = [];
+						cell.addNumber(0);
+					});
+					this.cells.forEach(cell=>{
+						console.info(cell.name);
+						const appCell = this.app.getCellByName(cell.name);
+						appCell.initial = cell.value != 0;
+						appCell.addNumber(cell.value);
+
+					});
+					this.toggle();
+				}
+				toggle(){
+					if(this.element.style.display == 'none'){
+						this.element.innerHTML = 'Paste here your puzzle';
+					}
+					this.element.style.display = this.element.style.display != 'none' ? 'none' : 'block';
+					
 				}
 			}
 			class Sudoku {
@@ -233,11 +380,62 @@
 				states = []
 				previousSelection = []
 				state_number = 1
+				parser = null;
+				loadSession(){
+					const session = this.getSession();
+					if(!session)
+						return null;
+					this.state_number = session.state_number;
+					this.states = session.states.map(state=>{
+						return new State(state);
+					});
+					this.refreshState();
+
+				}
+				getSession(){
+					const session = localStorage.getItem('session');
+					if(!session){
+						return null
+					}
+					return JSON.parse(session);
+				}
+									saveSession(){
+						this.pushState();
+						const states = this.states.map(state=>{
+							return state.toJson()
+						});
+						const session = {
+							state_number: this.state_number,
+							states: states
+						}
+						localStorage.setItem('session',JSON.stringify(session));
+						console.info('session saved');
+					}
+				getBoxValues(cell_name){
+					let values = this.cells.filter(cell=>{
+						return cell.name != cell_name && cell.name[0] == cell_name[0]
+					}).map(cell=>{
+						return cell.value
+					});
+					return values;
+				}
+				toggle(){
+					this.container.style.display = this.container.style.display != 'none' ? 'none' : 'block';
+				}
+				toggleParser(){
+					
+						//this.parser.toggle();
+					this.deSelectAll();
+					this.parser.toggle()
+
+				}
 				constructor(container,game_size){
 					
 					const _this = this;
 					this.container = container
 					this.element = container
+
+					this.parser = new SudokuParser(this,this.container);
 					this.game_size = game_size;
 					this.cell_count = game_size * game_size;
 					for(let row = 0; row < this.game_size; row++){
@@ -245,12 +443,17 @@
 							this.cells.push(new Cell(this,row,col));
 						}
 					}
-
+					
+					this.loadSession();
 					document.addEventListener('keypress',(e)=>{
+
 						if(!isNaN(e.key) || e.key == 'd'){
 							let number = e.key == 'd' ? 0 : Number(e.key);
 							_this.addNumberToSelection(number);
 							//console.info({set:Number(e.key)});
+						}
+						if(e.key == 'p'){
+							_this.toggleParser();
 						}
 						if(e.key == 'u'){
 							_this.popState();
@@ -314,11 +517,29 @@
 					if(!previousState || !previousState.equals(state)){	
 						this.states.push(state);
 						this.state_number++;
+						this.saveSession();			
 						console.info({pushState:state.getHash(),length:state.getHash().length,number:state.number});
 					}
 				}
+				refreshState(){
+					const state = this.getLastState();
+					if(!state)
+						return null;
+					this.applyState(state)
+					return state;
+				}
 				getLastState(){
 					return this.states.length ? this.states.at(this.states.length - 1) : null; 
+				}
+				applyState(state){
+					state.cells.forEach(stateCell=>{
+						const cell = this.getCellByName(stateCell.name);
+						cell.selected = stateCell.selected;
+						cell.values = stateCell.values;
+						cell.value = stateCell.value;
+						cell.update();
+					})
+
 				}
 				popState(){
 					let state = this.states.pop();
@@ -328,13 +549,9 @@
 					if(state.equals(this.createState())){
 						return this.popState();
 					}
-					state.cells.forEach(stateCell=>{
-						const cell = this.getCellByName(stateCell.name);
-						cell.selected = stateCell.selected;
-						cell.values = stateCell.values;
-						cell.value = stateCell.value;
-						cell.update();
-					})
+					
+					this.applyState(state);
+					this.saveSession();
 					console.info({popState:state.getHash(),length:state.getHash().length,number:state.number});
 				}
 				getCellByName(name){
@@ -388,13 +605,17 @@
 					//console.info({selected:this.selectedCells});
 				}
 				render(){
-					for(let i = 0; i < this.cell_count; i++){
-						this.cells[i].render(this.element);
-					}
+					
+
+					this.cells.forEach(cell=>{
+						cell.render(this.element);
+					});
 				}
 			}
-			const sudoku = new Sudoku(app,9);
-			sudoku.render();/*
+			const sudoku = new Sudoku(container,9);
+			sudoku.render();
+			const app = sudoku;
+			/*
 			document.addEventListener('contextmenu',(e)=>{
 				e.preventDefault();
 			});*/

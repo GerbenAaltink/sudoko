@@ -1,3 +1,4 @@
+#include <rlib.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -33,7 +34,7 @@ int * example_grid(int identifier){
     return &grid;
 }
 
-unsigned int count_neighbors(int grid[N][N], int row, int col) {
+unsigned int count_neighbors2(int grid[N][N], int row, int col) {
     unsigned int count = 0;
     for(int i = 0; i < row; i++){
         for(int j = 0; j < N; j++){
@@ -97,8 +98,46 @@ void print_grid(int grid[N][N],bool clear) {
     }
 }
 
-bool is_safe(int grid[N][N], int row, int col, int num) {
-    // Check row
+int count_neighbors(int grid[N][N],int row, int col){
+	// Check row
+    int num = -1;
+     int neighbors = 0;
+    for (int x = 0; x < N; x++) {
+        if(grid[row][x])
+		neighbors++;
+	if (grid[row][x] == num) {
+            return 0;
+        }
+    }
+
+    // Check column
+    for (int x = 0; x < N; x++) {
+        if(grid[x][col])
+		neighbors++;
+	if (grid[x][col] == num) {
+            return 0;
+        }
+    }
+
+    // Check box
+    int startRow = row - row % (N / 3), startCol = col - col % (N / 3);
+    for (int i = 0; i < N / 3; i++) {
+        for (int j = 0; j < N / 3; j++) {
+	    if(grid[i + startRow][j + startCol])
+		neighbors++;
+            if (grid[i + startRow][j + startCol] == num) {
+                return 0;
+            }
+        }
+    }
+    printf("Neighbor count: %d\n", neighbors);
+    return neighbors;
+}
+
+int is_safe(int grid[N][N], int row, int col, int num) {
+    if(count_neighbors(grid, row,col) < 4)
+	    return false;
+	// Check row
     for (int x = 0; x < N; x++) {
         if (grid[row][x] == num) {
             return false;
@@ -138,7 +177,26 @@ int * grid_new(){
     return (int *)calloc(sizeof(int),N*N);
 }
 
-bool get_easiest_cell(int grid[N][N], unsigned int * easy_row, unsigned int * easy_col){
+bool get_easiest_cell(int grid[N][N], unsigned int *easy_row, unsigned int *easy_col){
+	int highest_neighbor_count = 0;
+	bool found = false;
+	for(int row = 0; row < N; row++){
+	{
+		for(int col = 0; col < N; col++){
+			int neighbor_count = count_neighbors(grid,row,col);
+			if(neighbor_count > highest_neighbor_count){
+				highest_neighbor_count = neighbor_count;
+				*easy_row = row;
+				*easy_col = col;
+				found = true;
+			}
+		}
+	}
+	return found;
+	}
+}
+
+bool get_easiest_cell3(int grid[N][N], unsigned int * easy_row, unsigned int * easy_col){
     unsigned int easy_neighbor_count = 0;
     bool found = true;
     for(int row = 0; row < N; row++){

@@ -15,6 +15,23 @@ unsigned int rand_int(int min, int max){
     return rand() % (max - min + 1) + min;
 }
 
+int * example_grid(int identifier){
+    while(identifier == 4 || identifier == 2)
+       identifier = rand_int(0,9); 
+    static int grid[N][N] = {
+        {4, 2, 0, 0, 0, 1, 0, 0, 0},
+        {0, 0, 1, 0, 0, 0, 9, 0, 0},
+        {0, 0, 0, 3, 0, 0, 0, 8, 0},
+        {0, 0, 0, 0, 3, 0, 0, 0, 4},
+        {0, 0, 0, 0, 0, 7, 0, 0, 0},
+        {0, 0, 0, 0, 0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0, 0, 4, 2, 0}
+    };
+    grid[N-1][0] = identifier;
+    return &grid;
+}
 
 unsigned int count_neighbors(int grid[N][N], int row, int col) {
     unsigned int count = 0;
@@ -51,6 +68,21 @@ void draw_cell(int c)
         printf(" 0 ");
     }    
     printf("%s", ANSII_CLEAR);
+}
+
+char * grid_to_string(int grid[N][N]){
+	static char result[1024];
+	result[0] = 0;
+	for (int row = 0; row < N; row++) {
+        for (int col = 0; col < N; col++) {
+        	char chunk[4];
+	    	chunk[0] = 0;
+	        sprintf(chunk,"%d ",grid[row][col]);
+	        strcat(result,chunk);	
+        }
+        strcat(result,"\n");
+    }
+    return result;
 }
 
 void print_grid(int grid[N][N],bool clear) {
@@ -213,6 +245,10 @@ unsigned int _solve2(int grid[N][N], int * attempts, bool draw) {
     }
     
     return 0;
+}
+unsigned int solve2(int grid[N][N], bool draw){
+    int attempts = 0;
+    return _solve2(grid,&attempts, draw);
 }
 
 unsigned int solve(int grid[N][N],bool draw) {

@@ -25,17 +25,20 @@ pthread_mutex_t * global_m_lock = NULL;
     } \
     pthread_mutex_unlock(global_m_lock);
     
+
 typedef struct thread_data_t {
-    int * puzzle;
-    int * solution;
+    int puzzle[N][N];
+    int solution[N][N];
     pthread_t thread;
-    unsigned int complexity;
-    unsigned int result_complexity;
-    
-    unsigned int initial_count_minimum;
-    unsigned int initial_count_maximum;
-    unsigned int result_initial_count;
-    unsigned int id;
+    ulong steps;
+    ulong steps_total;
+    uint complexity;
+    uint result_complexity;
+    uint solved_count; 
+    uint initial_count_minimum;
+    uint initial_count_maximum;
+    uint result_initial_count;
+    uint id;
     pthread_mutex_t lock;
     bool is_done;
     nsecs_t start;
@@ -62,7 +65,6 @@ void grid_set_random_free_cell(int grid[N][N]){
     int rn, row, col;
     
     while(true){
-    WITH_MUTEX({
     rn = (rand() % N) + 1;
     row = rand() % N;
     col = rand() % N;
@@ -71,7 +73,6 @@ void grid_set_random_free_cell(int grid[N][N]){
         row = rand() % N;
         col = rand() % N;
     }
-    },false);
    // printf("CHECK %d:%d:%d\n",row,col,rn);
         if(is_safe(grid,row,col, rn)){
            // printf("CHECKED\n");
@@ -96,16 +97,30 @@ int * grid_with_minimal_complexity(thread_data_t * tdata){
     int * grid_game = NULL;
     while(true){
         tdata->result_initial_count = rand_int(tdata->initial_count_minimum,tdata->initial_count_maximum);
-        grid_set_random_free_cells(grid,tdata->result_initial_count);
+        
+	grid_set_random_free_cells(grid,tdata->result_initial_count);
         //print_grid(grid,false);
         grid_game = grid_copy(grid);
         //footer_printf("Solving: %ld", tdata->result_initial_count);
-        tdata->result_complexity = solve(grid,false);
+        
+    	tdata->start = nsecs();
+	tdata->steps = 0;
+	
+	tdata->result_complexity = _solve(grid,&tdata->steps,false);
+	tdata->steps_total += tdata->steps;
+	tdata->steps = 0;
+	tdata->solved_count++;
         if(tdata->result_complexity == 0){
-            footer_printf("thread %d failed validation",tdata->id);
+            //footer_printf("thread %d failed validation",tdata->id);
         }else{
-            footer_printf("thread %d solved: %d",tdata->id, tdata->result_complexity);
-        }tdata->solution = grid;
+            //footer_printf("thread %d solved: %d",tdata->id, tdata->result_complexity);
+        }
+	//if(tdata->solution)
+	//	free(tdata->solution);
+	
+
+	memcpy(tdata->solution,grid,N*N*sizeof(int));
+
         if(tdata->result_complexity >= tdata->complexity){
             break;
         }else{
@@ -120,40 +135,211 @@ void generate_game(thread_data_t * tdata){
     //unsigned int * result_complexity = (int *)calloc(sizeof(int),1);
     //unsigned int * result_initial_count = (int *)calloc(sizeof(int),1);
     //rr_disable_stdout();
-   sleep(3);
-   WITH_MUTEX({
-    tdata->start = nsecs();
+   
+       int * puzzle =  grid_with_minimal_complexity(tdata);
+    
+	//if(tdata->puzzle){
+		//free(tdata->puzzle);
 
+	//}
 
-},false);
-       tdata->puzzle = grid_with_minimal_complexity(tdata);
-    WITH_MUTEX({
+		memcpy(tdata->puzzle,puzzle,N*N*sizeof(int));
     tdata->finish = nsecs();
     tdata->duration = tdata->finish - tdata->start;
     tdata->is_done = true;
-    },false);
+}
+
+
+char * thread_data_to_string(thread_data_t * data){
+	static char result[4096];
+	memset(result,0,sizeof(result));
+	sprintf(result,"id:%d\ttotal solved: %d \tsteps total: %s\tsteps current: %s\tinitc: %d\ttime: %s\tDebug: %lld %lld",
+		data->id,
+		data->solved_count,
+		rtempc(rformat_number(data->steps_total + data->steps)),
+		rtempc(rformat_number(data->steps)),
+		data->result_initial_count,
+		format_time(nsecs() - data->start),
+		data->steps_total + data->steps,
+		data->steps
+	);
+	return result;
+}
+
+char * runner_status_to_string(thread_data_t * runners, unsigned int runner_count){
+	static char result[1024*1024];
+	memset(result,0,sizeof(result));
+	
+	for(int i = 0; i < runner_count; i++){
+		strcat(result,thread_data_to_string(&runners[i]));
+	       strcat(result,"\n");	
+	}
+	return result;
+
+}
+
+typedef struct serve_arguments_t {
+	thread_data_t * runners;
+	unsigned int runner_count;
+	int port;
+	nsecs_t time_winner;
+	int puzzle_winner[N][N];
+	int solution_winner[N][N];
+	char start_timestamp[30];
+} serve_arguments_t;
+
+
+serve_arguments_t serve_arguments;
+
+void get_totals(thread_data_t * runners, unsigned int runner_count, ulong * steps_total, ulong * solved_total,nsecs_t * longest_running){
+	*steps_total = 0;
+	*solved_total = 0;
+	*longest_running = 0;
+	nsecs_t end_time = nsecs();
+	for(unsigned int i = 0; i < runner_count; i++){
+		*steps_total += runners[i].steps_total + runners[i].steps;
+		*solved_total += runners[i].solved_count;
+		nsecs_t duration = runners[i].start ? end_time - runners[i].start : 0;
+		if(duration > *longest_running){
+			*longest_running = duration;
+		}
+	}
+}
+
+int request_handler_root(rhttp_request_t *r){
+	if(!strcmp(r->path,"/")){
+	WITH_MUTEX({
+		char * content = runner_status_to_string(serve_arguments.runners,serve_arguments.runner_count);
+		ulong steps_total = 0;
+		ulong solved_total = 0;
+		nsecs_t longest_running = 0;
+		get_totals(serve_arguments.runners, serve_arguments.runner_count, &steps_total, &solved_total, &longest_running);
+		char html[1024*1024*2] = {0};
+		sprintf(html, "<html><meta http-equiv=\"refresh\" content=\"1\"><head>"
+				"<body style=\"background-color:black;color:white;\"><pre>"
+				"%s"
+				"Started: %s\n"
+				"\n"
+				"Steps total: %s\n"
+				"Solved total: %s\n"
+				"Steps per puzzle: %s\n"
+				"Longest running: %s\n"
+				"Generation time hardest puzzle: %s\n"
+				"\n"
+				"Hardest puzzle:\n"
+				"%s\n"
+				"Solution:\n"
+				"%s\n"
+				"</pre>"
+				"</body></html>",
+				content, 
+				serve_arguments.start_timestamp,
+				rtempc(rformat_number(steps_total)),
+				rtempc(rformat_number(solved_total)),
+				rtempc(rformat_number(solved_total != 0 ? steps_total / (solved_total + serve_arguments.runner_count) : 0)),
+				rtempc(format_time(longest_running)),
+				rtempc(format_time(serve_arguments.time_winner)),
+				rtempc(grid_to_string(serve_arguments.puzzle_winner)), 
+				rtempc(grid_to_string(serve_arguments.solution_winner))
+		);
+		char response[1024*1024*3];
+		memset(response,0,sizeof(response));
+		sprintf(response,"HTTP/1.1 200 OK\r\n"
+				"Content-Length: %d\r\n"
+				"Content-Type: text/html\r\n"
+				"Connection: close:\r\n\r\n%s",
+				strlen(html),html);
+		rhttp_send_drain(r->c, response,0);
+		close(r->c);
+	},true);
+	return 1;
+	}
+	return 0;
+}
+
+int request_handler_empty(rhttp_request_t * r){
+	if(!strncmp(r->path,"/empty",strlen("/empty"))){
+		int grid[N][N];
+		memset(grid,0,N*N*sizeof(int));
+		char * content = grid_to_string(grid);
+		char response[1024];
+	       response[0] = 0;
+       	        sprintf(
+			response, 
+			"HTTP/1.1 200 OK\r\nContent-Length:%ld\r\nConnection: close\r\n\r\n%s",
+			strlen(content),
+			content
+		);	
+		rhttp_send_drain(r->c,response,0);
+		close(r->c);
+		return 1;
+	}
+	return 0;
+}
+
+int request_handler_404(rhttp_request_t *r){
+	char content[] = "HTTP/1.1 404 Document not found\r\nContent-Length:3\r\nConnection:close\r\n\r\n404";
+	rhttp_send_drain(r->c,content,0);
+	close(r->c);
+	return 1;
+};
+
+int request_handler(rhttp_request_t * r){
+	if(request_handler_root(r)){
+		return 1;
+	}else if(request_handler_empty(r)){
+		return 1;	
+	}else if(rhttp_file_request_handler(r)){
+		return 1;
+	}else {
+		return request_handler_404(r);
+	}
+}
+
+
+void * serve_thread(void *arg){
+	serve_arguments_t * arguments = (serve_arguments_t *)arg;
+	//printf("%d\n",arguments->runner_count);
+	//exit(0);
+	rhttp_serve("0.0.0.0",arguments->port,1024,1,1,request_handler);
+	return NULL;
 }
 
 unsigned int generate_games(unsigned int game_count, unsigned int timeout, unsigned int complexity){
+    pthread_t thread_serve; 
+
+    
     thread_data_t runners[game_count];
+    serve_arguments.runners = runners;
+    serve_arguments.runner_count = game_count;
+    serve_arguments.port = 9999;
+    serve_arguments.time_winner = 0;
+    strcpy(serve_arguments.start_timestamp,rstrtimestamp());
+    memset(serve_arguments.solution_winner,0,sizeof(serve_arguments.solution_winner));
+    memset(serve_arguments.puzzle_winner,0,sizeof(serve_arguments.puzzle_winner));
+    
+    pthread_create(&thread_serve,0,serve_thread,(void *)&serve_arguments);
     //pthread_mutex_t lock;
     //pthread_mutex_init(&lock,NULL);
     for(unsigned int i = 0; i < game_count; i++){
         runners[i].initial_count_maximum = 30;
-        runners[i].initial_count_minimum = 17;
+        runners[i].initial_count_minimum = 1;
         runners[i].complexity = complexity;
         runners[i].is_done = false;
         runners[i].id = i;
-        //runners[i].lock = lock;
+	memset(runners[i].solution,0,N*N*sizeof(int));
+	memset(runners[i].puzzle,0,N*N*sizeof(int));
+        runners[i].solved_count = 0;
+	runners[i].duration = 0;
+	runners[i].steps = 0;
+	runners[i].steps_total = 0;
+	//runners[i].lock = lock;
         pthread_create(&runners[i].thread,NULL,generate_game,(void *)(&runners[i]));
     }
     unsigned int highest_complexity = complexity;
-    nsecs_t time_start = 0;
-    WITH_MUTEX({
-        time_start = nsecs();
-    },true);
+    nsecs_t time_start = nsecs();
     for(unsigned int i = 0; i < timeout; i++){
-        sleep(1);
+        sleep(1000);
         WITH_MUTEX({
         nsecs_t time_elapsed = nsecs() - time_start;
         
@@ -162,29 +348,40 @@ unsigned int generate_games(unsigned int game_count, unsigned int timeout, unsig
         for(int ithread = 0; ithread < game_count; ithread++){
             if(runners[ithread].is_done){
                 pthread_join(runners[ithread].thread,NULL);
-                printf("\r\n");
-                print_grid(runners[ithread].puzzle,true);
-                printf("\n");
-                print_grid(runners[ithread].solution,false);
-                if(runners[ithread].result_complexity > highest_complexity){
-                    highest_complexity = runners[ithread].result_complexity; 
-                    for(int j = 0; j < game_count; j++){
+               		
+		if(runners[ithread].result_complexity > highest_complexity){
+         	highest_complexity = runners[ithread].result_complexity; 
+                  	for(int j = 0; j < game_count; j++){
                         runners[j].complexity = highest_complexity;
-                    }
+                    
+			}
+
+ 			printf("\r\n");
+			print_grid(runners[ithread].puzzle,true);
+			printf("\n");
+			print_grid(runners[ithread].solution,false);
+               
+	
+			memcpy(serve_arguments.puzzle_winner,runners[ithread].puzzle,N*N*sizeof(int));
+			memcpy(serve_arguments.solution_winner,runners[ithread].solution,N*N*sizeof(int));
+			serve_arguments.time_winner = runners[ithread].duration;
+
+
+               	printf("Thread %d is done (%s)\n",ithread,format_time(runners[ithread].duration));
+                	printf("Complexity: %ld\n",runners[ithread].result_complexity);
+                	printf("Initial values: %ld\n",runners[ithread].result_initial_count);
+                
                 }
-                printf("Thread %d is done (%s)\n",ithread,format_time(runners[ithread].duration));
-                printf("Complexity: %ld\n",runners[ithread].result_complexity);;
-                printf("Initial values: %ld\n",runners[ithread].result_initial_count);
                 runners[ithread].is_done = false;
-                free(runners[ithread].puzzle);
-                runners[ithread].puzzle = NULL;
-                free(runners[ithread].solution);
-                runners[ithread].solution = NULL;
-                printf("\n");
-                pthread_create(&runners[ithread].thread,NULL,generate_game,(void *)(&runners[ithread]));
+                //free(runners[ithread].puzzle);
+                //runners[ithread].puzzle = NULL;
+                //free(runners[ithread].solution);
+                //runners[ithread].solution = NULL;
+		pthread_create(&runners[ithread].thread,NULL,generate_game,(void *)(&runners[ithread]));
             
             }
-        }   
+        }
+
         //pthread_mutex_unlock(&lock);
     },true);
     }
@@ -198,6 +395,7 @@ unsigned int generate_games(unsigned int game_count, unsigned int timeout, unsig
 }
 
 int main() {
+    setbuf(stdout,NULL);
 
     srand(time(NULL));
    // setbuf(stdout,0);
@@ -302,7 +500,7 @@ ONEINDIG?
 0 0 0 6 8 0 0 4 0 
 4 0 0 1 0 0 0 0 0 
 */
-    int grid[N][N] = {
+    int grid_empty[N][N] = {
         {0, 0, 0, 0, 0, 0, 0, 0, 0},
         {0, 0, 0, 0, 0, 0, 0, 0, 0},
         {0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -313,15 +511,5 @@ ONEINDIG?
         {0, 0, 0, 0, 0, 0, 0, 0, 0},
         {0, 0, 0, 0, 0, 0, 0, 0, 0}
     };
-    set_random_free_cells(grid,9);
-   // unsigned int attempts = solve(grid);
-   // printf("Matches: %d\n",attempts);
-    int * test_grid = grid_copy(grid);
-    print_grid(test_grid,true);
-   // exit(0);
-    unsigned int attempts = solve(grid,false);
-    print_grid(grid,false);
-    printf("Attempts: %d\n",attempts);
-    print_grid(test_grid,false);
     
 }

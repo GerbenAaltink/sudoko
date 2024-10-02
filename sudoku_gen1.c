@@ -104,14 +104,15 @@ int * grid_with_minimal_complexity(thread_data_t * tdata){
         //footer_printf("Solving: %ld", tdata->result_initial_count);
         
     	tdata->start = nsecs();
-	tdata->steps = 0;
-	
+	//tdata->steps = 0;
 	tdata->result_complexity = _solve(grid,&tdata->steps,false);
 	tdata->steps_total += tdata->steps;
 	tdata->steps = 0;
 	tdata->solved_count++;
         if(tdata->result_complexity == 0){
-            //footer_printf("thread %d failed validation",tdata->id);
+            //print_grid(grid,true);
+			//exit(5);
+			//footer_printf("thread %d failed validation",tdata->id);
         }else{
             //footer_printf("thread %d solved: %d",tdata->id, tdata->result_complexity);
         }
@@ -153,6 +154,33 @@ void generate_game(thread_data_t * tdata){
     },false);
 }
 
+void thread_data_to_json_object(rjson_t * json ,thread_data_t * data){
+	rjson_object_start(json);
+	rjson_kv_int(json,"id",data->id);
+	rjson_kv_int(json,"solved_count",data->solved_count);
+	rjson_kv_number(json,"steps_total",data->steps_total);
+	rjson_kv_number(json,"steps",data->steps);
+	rjson_kv_number(json,"result_initial_count",data->result_initial_count);
+	rjson_kv_duration(json,"start",data->start);
+	rjson_kv_duration(json,"finish",data->finish);
+	rjson_kv_duration(json,"duration",nsecs() - data->start);
+	rjson_kv_string(json,"puzzle",grid_to_string(data->puzzle));
+	rjson_kv_string(json,"solution",grid_to_string(data->solution));
+	rjson_object_close(json);
+}
+char * thread_data_to_json(thread_data_t * data, int runner_count){
+	rjson_t * json = rjson();
+	rjson_array_start(json);
+	for(int i = 0; i < runner_count; i++){
+	thread_data_to_json_object(json,&data[i]);
+	}
+	rjson_array_close(json);
+	
+	char * content = strdup(json->content);
+	rjson_free(json);
+	return content;
+	
+}
 
 char * thread_data_to_string(thread_data_t * data){
 	static char result[4096];
@@ -210,14 +238,39 @@ void get_totals(thread_data_t * runners, unsigned int runner_count, ulong * step
 	}
 }
 
+void http_response(rhttp_request_t * r, char * content){
+	char headers[strlen(content) + 1000];
+	sprintf(headers,"HTTP/1.1 200 OK\r\n"
+	"Content-Length:%ld\r\n"
+	"Content-Type: text/html\r\n"
+	"Connection: close\r\n\r\n%s",
+	strlen(content),content);
+	rhttp_send_drain(r->c,headers,0);
+	close(r->c);
+}
+
+int request_handler_processes(rhttp_request_t*r){
+	if(!strncmp(r->path,"/processes",strlen("/processes"))){
+		WITH_MUTEX({
+		char * content = thread_data_to_json(serve_arguments.runners,serve_arguments.runner_count); // runner_status_to_string(serve_arguments.runners,serve_arguments.runner_count);
+		http_response(r,content);
+
+		free(content);
+		},false);
+		return 1;
+	}
+	return 0;
+}
+
 int request_handler_root(rhttp_request_t *r){
+	serve_arguments_t args = *(serve_arguments_t *)r->context;
 	if(!strcmp(r->path,"/")){
 	WITH_MUTEX({
-		char * content = runner_status_to_string(serve_arguments.runners,serve_arguments.runner_count);
+		char * content = runner_status_to_string(args.runners,args.runner_count);
 		ulong steps_total = 0;
 		ulong solved_total = 0;
 		nsecs_t longest_running = 0;
-		get_totals(serve_arguments.runners, serve_arguments.runner_count, &steps_total, &solved_total, &longest_running);
+		get_totals(args.runners, args.runner_count, &steps_total, &solved_total, &longest_running);
 		char html[1024*1024*2] = {0};
 		sprintf(html, "<html><meta http-equiv=\"refresh\" content=\"5\"><head>"
 				"<body style=\"background-color:black;color:white;\"><pre>"
@@ -237,14 +290,14 @@ int request_handler_root(rhttp_request_t *r){
 				"</pre>"
 				"</body></html>",
 				content, 
-				serve_arguments.start_timestamp,
+				args.start_timestamp,
 				rtempc(rformat_number(steps_total)),
 				rtempc(rformat_number(solved_total)),
-				rtempc(rformat_number(solved_total != 0 ? steps_total / (solved_total + serve_arguments.runner_count) : 0)),
+				rtempc(rformat_number(solved_total != 0 ? steps_total / (solved_total + args.runner_count) : 0)),
 				rtempc(format_time(longest_running)),
-				rtempc(format_time(serve_arguments.time_winner)),
-				rtempc(grid_to_string(serve_arguments.puzzle_winner)), 
-				rtempc(grid_to_string(serve_arguments.solution_winner))
+				rtempc(format_time(args.time_winner)),
+				rtempc(grid_to_string(args.puzzle_winner)), 
+				rtempc(grid_to_string(args.solution_winner))
 		);
 		char response[1024*1024*3];
 		memset(response,0,sizeof(response));
@@ -254,7 +307,6 @@ int request_handler_root(rhttp_request_t *r){
 				"Connection: close:\r\n\r\n%s",
 				strlen(html),html);
 		rhttp_send_drain(r->c, response,0);
-		close(r->c);
 	},true);
 	return 1;
 	}
@@ -275,7 +327,6 @@ int request_handler_empty(rhttp_request_t * r){
 			content
 		);	
 		rhttp_send_drain(r->c,response,0);
-		close(r->c);
 		return 1;
 	}
 	return 0;
@@ -284,28 +335,30 @@ int request_handler_empty(rhttp_request_t * r){
 int request_handler_404(rhttp_request_t *r){
 	char content[] = "HTTP/1.1 404 Document not found\r\nContent-Length:3\r\nConnection:close\r\n\r\n404";
 	rhttp_send_drain(r->c,content,0);
-	close(r->c);
 	return 1;
 };
 
 int request_handler(rhttp_request_t * r){
-	if(request_handler_root(r)){
-		return 1;
-	}else if(request_handler_empty(r)){
-		return 1;	
-	}else if(rhttp_file_request_handler(r)){
-		return 1;
-	}else {
-		return request_handler_404(r);
-	}
+	rhttp_request_handler_t request_handlers[] ={
+		request_handler_root,
+		request_handler_empty,
+		request_handler_processes,
+		rhttp_file_request_handler,
+		request_handler_404,
+		NULL 
+	};
+	int i = -1;
+	while(request_handlers[++i])
+		if(request_handlers[i](r))
+			return 1;
+	return 0;
 }
 
 
 void * serve_thread(void *arg){
 	serve_arguments_t * arguments = (serve_arguments_t *)arg;
-	//printf("%d\n",arguments->runner_count);
-	//exit(0);
-	rhttp_serve("0.0.0.0",arguments->port,1024,1,1,request_handler);
+	
+	rhttp_serve("0.0.0.0",arguments->port,1024,1,1,request_handler,(void *)arguments);
 	return NULL;
 }
 

@@ -34,7 +34,7 @@ int * example_grid(int identifier){
     return &grid;
 }
 
-unsigned int count_neighbors2(int grid[N][N], int row, int col) {
+unsigned int count_neighbors(int grid[N][N], int row, int col) {
     unsigned int count = 0;
     for(int i = 0; i < row; i++){
         for(int j = 0; j < N; j++){
@@ -98,7 +98,7 @@ void print_grid(int grid[N][N],bool clear) {
     }
 }
 
-int count_neighbors(int grid[N][N],int row, int col){
+int count_neighbors2(int grid[N][N],int row, int col){
 	// Check row
     int num = -1;
      int neighbors = 0;
@@ -130,13 +130,12 @@ int count_neighbors(int grid[N][N],int row, int col){
             }
         }
     }
-    printf("Neighbor count: %d\n", neighbors);
     return neighbors;
 }
 
 int is_safe(int grid[N][N], int row, int col, int num) {
-    if(count_neighbors(grid, row,col) < 4)
-	    return false;
+    //if(count_neighbors(grid, row,col) < 4)
+	  //  return false;
 	// Check row
     for (int x = 0; x < N; x++) {
         if (grid[row][x] == num) {
@@ -177,7 +176,7 @@ int * grid_new(){
     return (int *)calloc(sizeof(int),N*N);
 }
 
-bool get_easiest_cell(int grid[N][N], unsigned int *easy_row, unsigned int *easy_col){
+bool get_easiest_cell2(int grid[N][N], unsigned int *easy_row, unsigned int *easy_col){
 	int highest_neighbor_count = 0;
 	bool found = false;
 	for(int row = 0; row < N; row++){
@@ -196,7 +195,7 @@ bool get_easiest_cell(int grid[N][N], unsigned int *easy_row, unsigned int *easy
 	}
 }
 
-bool get_easiest_cell3(int grid[N][N], unsigned int * easy_row, unsigned int * easy_col){
+bool get_easiest_cell(int grid[N][N], unsigned int * easy_row, unsigned int * easy_col){
     unsigned int easy_neighbor_count = 0;
     bool found = true;
     for(int row = 0; row < N; row++){
@@ -306,10 +305,10 @@ unsigned int _solve2(int grid[N][N], int * attempts, bool draw) {
 }
 unsigned int solve2(int grid[N][N], bool draw){
     int attempts = 0;
-    return _solve2(grid,&attempts, draw);
+    return _solve(grid,&attempts, draw);
 }
 
 unsigned int solve(int grid[N][N],bool draw) {
     int attempts = 0;
-    return _solve(grid,&attempts, draw);
+    return _solve2(grid,&attempts, draw);
 }

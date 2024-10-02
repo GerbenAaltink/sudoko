@@ -1,630 +1,711 @@
 <html>
-	<head>
-	</head>
-	<body>
 
-		<div id="app" class="app"></div>
-		<pre>
+<head>
+</head>
+
+<body>
+
+	<div id="app" class="app"></div>
+	<pre>
 			TODO:
 			 - if orange fields, no other selections should be possible than deselect.
 		</pre>
-		<template id="template_sudoku_container">
-			<div class="width:640px;height:640px;text-size:26px;" class="container-content"></div>
-		</template>
-		<template id="template_sudoku_parser">
-			<div class="width:100%;height:100%" class="parser-content"></div>
-		</template>
-		<template id="template_sudoku_cell">
-			<div class="cell-content"></div>
-		</template>
-		<style type="text/css">
-			.app {
-				width:400px;
-				height:400px;
+	<template id="template_sudoku_container">
+		<div style="width:640px;height:640px;font-size:1.2em;" class="container-content"></div>
+	</template>
+	<template id="template_sudoku_parser">
+		<div style="width:100%;height:100%" class="parser-content"></div>
+	</template>
+	<template id="template_sudoku_cell">
+		<div class="cell-content"></div>
+	</template>
+	<style type="text/css">
+		.app {
+			width: 400px;
+			height: 400px;
+		}
+
+		.cell-content {
+
+			font-family: 'Courier New', Courier, monospace;
+			user-select: none;
+			-webkit-user-select: none;
+			-moz-user-select: none;
+			-ms-user-select: none;
+			border: 1px solid #CCCCCC;
+			text-align: center;
+			height: 10%;
+			width: 10%;
+			float: left;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			font-size: calc(5px + 1vw);
+		}
+
+		.sudoku-cell-selected {
+			background-color: lightgreen;
+		}
+
+		.sudoku-cell-invalid {
+			color: red;
+			font-weight: bold;
+		}
+	</style>
+	<script type="text/javascript">
+
+		const game_size = 9;
+		const container_template = document.getElementById('template_sudoku_container');
+		const cell_template = document.getElementById("template_sudoku_cell");
+		const sudokuParserTemplate = document.getElementById('template_sudoku_parser');
+		const container = document.getElementById('app'); //.importNode(container_template.content, true);
+		const _hashChars = "abcdefghijklmnopqrstuvwxyz\"':[]0123456789";
+		function hashString(str) {
+			let result = 0;
+			for (let i = 0; i < str.length; i++) {
+				result += (_hashChars.indexOf(str[i]) + 1) * (i * 40);
 			}
-			.cell-content {
-				    user-select: none; /* Standard syntax */
-				    -webkit-user-select: none; /* Safari */
-				    -moz-user-select: none; /* Firefox */
-				    -ms-user-select: none; /* Internet Explorer/Edge */
-			border:1px solid #CCCCCC;line-height:250%;text-align:center;height:10%;width:10%;float:left;
-			}
-			.sudoku-cell-selected {
-				background-color: lightgreen;
-			}
-			.sudoku-cell-invalid{
-				color: red;
-				font-weight: bold;
-			}	
-		</style>
-		<script type="text/javascript">
-			const game_size = 9;
-			const container_template = document.getElementById('template_sudoku_container');
-			const cell_template = document.getElementById("template_sudoku_cell");
-			const sudokuParserTemplate = document.getElementById('template_sudoku_parser');
-			const container = document.getElementById('app'); //.importNode(container_template.content, true);
-			const _hashChars = "abcdefghijklmnopqrstuvwxyz\"':[]0123456789";
-			function hashString(str) {
-				let result = 0;
-				for(let i = 0; i < str.length; i++){
-					result += (_hashChars.indexOf(str[i]) + 1) * (i * 40);
+			return result;
+		}
+		class State {
+			number = 0
+			cells = []
+			selection = []
+			selectionCount = 0
+			_string = null
+			_hash = null
+			_json = null;
+			constructor(arg) {
+				if (isNaN(arg)) {
+					this.number = arg.number;
+					this.cells = arg.cells;
+					this.selectCount = arg.selectionCount;
+					this._hash = arg._hash;
+					this._json = arg;
+				} else {
+					this.number = arg;
 				}
-				return result;
 			}
-			class State {
-				number = 0
-				cells = []
-				selection = []
-				selectionCount = 0
-				_string = null
-				_hash = null
-				_json = null;
-				constructor(arg){
-					if(isNaN(arg)){
-						this.number = arg.number;
-						this.cells = arg.cells;
-						this.selectCount = arg.selectionCount;
-						this._hash = arg._hash;
-						this._json = arg;
-					}else{
-						this.number = arg;
-					}
-				}
-				toJson(){
-					if(this._json == null){
+			toJson() {
+				if (this._json == null) {
 					const json = {
 						number: this.number,
 						cells: this.cells,
-						selectionCount:this.selectionCount,
-						_hash:this.getHash()
+						selectionCount: this.selectionCount,
+						_hash: this.getHash()
 					};
-						this._json = json;
-					}
-					return this._json;
+					this._json = json;
 				}
-				
-				getHash(){
-					if(this._hash == null){
-						let started = false;
-						let count = 0;
-						let hash = this.cells.filter((cell)=>{
-							if(!started && cell.state[0] == 0 && cell.state[1] == 1)
-								return false;
-							started = true;;
-							count++;
+				return this._json;
+			}
+
+			getHash() {
+				if (this._hash == null) {
+					let started = false;
+					let count = 0;
+					let hash = this.cells.filter((cell) => {
+						if (!started && cell.state[0] == 0 && cell.state[1] == 1)
+							return false;
+						started = true;;
+						count++;
+						return true;
+					}).map(cell => {
+						return cell.state;
+					}).join('');
+					this._hash = `${count}${hash}`;
+				}
+				return this._hash
+			}
+			equals(otherState) {
+				if (otherState.selectionCount != this.selectionCount)
+					return false;
+				return otherState.getHash() == this.getHash();
+			}
+			toString() {
+				if (this._string == null) {
+					this._string = JSON.stringify({
+						number: this.number,
+						selection: this.selection.map(cell => cell.toString()),
+						cells: this.cells
+					});
+				}
+				return this._string
+			}
+		};
+		class Cell {
+			row = 0;
+			col = 0;
+			initial = false;
+			letter = null
+			name = null
+			options = [];
+			value = 0;
+			values = []
+			element = null;
+			app = null;
+			selected = false;
+			container = null;
+			async solve(){
+				this.app.pushState();
+				let originalValues = this.values;
+				let valid = false;
+				this.selected = false;
+				for(let i = 1; i < 10; i++){
+					this.addNumber(i);
+					if(this.validate())
+						if(await this.app.solve())
 							return true;
-						}).map(cell=>{
-							return cell.state;
-						}).join('');
-						this._hash = `${count}${hash}`;
-					}
-					return this._hash
-				}
-				equals(otherState){
-					if(otherState.selectionCount != this.selectionCount)
-						return false;
-					return otherState.getHash() == this.getHash();
-				}
-				toString()
-				{
-					if(this._string == null){
-						this._string = JSON.stringify({
-						number:this.number,
-						selection:this.selection.map(cell=>cell.toString()),
-						cells:this.cells
-					});
-					}
-					return this._string
-				}
-			};
-			class Cell {
-				row = 0;
-				col = 0;
-				initial = false;
-				letter = null
-				name = null
-				options = [];
-				value = 0;
-				values = []
-				element = null;
-				app = null;
-				selected = false;
-				container = null;
-				valid = true;
-				getState() {
-					return `${this.selected?1:0}${this.valid?1:0}`;
-				}
-				toggleSelect(){
-					this.selected = !this.selected;
-					
-					if(this.selected){
-						this.select();
-						//this.element.classList.add('sudoku-cell-selected');
-					}else{
-						this.deSelect();
-						//this.element.classList.remove('sudoku-cell-selected');
-					}
-					this.update();
-					return this.selected;
-				
-
-				}
-				addNumber(value){
-					this.values.pop(value);
-					this.values.push(value);
-					this.value = Number(value);
-					
-					this.element.textContent = this.value == 0 ? "" :  String(this.value);
-					this.validate();
-					//this.update();
-
-
-				}
-				onClick(){
-					//this.
-					if(!this.initial)
-					this.toggleSelect();
-					//this.app.onCellClick(this)
-				}
-				deSelect(){
-					this.selected = false;
-					this.element.classList.remove('sudoku-cell-selected');
-				}
-				select(){
-					this.selected = true;
-					this.element.classList.add('sudoku-cell-selected');
-
-				}
-				isValid(){
-					const _this = this;
-					this.valid = !this.value || !this.app.cells.filter(cell=>{
-						return cell.value != 0 && 
-							cell != _this && 
-							(cell.row == _this.row || cell.col == _this.col) && 
-							cell.value == _this.value;
-					}).length; //&& !this.app.getBoxValues(this.name).indexOf(this.value) == -1);
-					return this.valid;
-				}
-				update(){
-					if(this.selected)
-						this.select()
-					else
-						this.deSelect()
-					this.app.cells.forEach(cell=>{
-						cell.validate()
-					})
-					this.element.textContent = this.value ? String(this.value) : "";
-					
-				}
-				validate(){
-					if(this.isValid()){
-						this.element.classList.remove('sudoku-cell-invalid');
-					}else{
-						this.element.classList.add('sudoku-cell-invalid');
-					}
-					return this.valid;
-				}
-				destructor(){
-					//this.container.delete();
-				}
-				constructor(app,row,col){
-					this.app = app;
-					this.container = document.importNode(cell_template.content,true);
-					this.row = row;
-					this.col = col;
-					this.selected = false;
-					this.letter = "abcdefghi"[row];
-					this.name = `${this.letter}${this.col}`
 					this.value = 0;
-					this.values = [];
-					this.element = this.container.querySelector('.cell-content');
-					this.valid = true;
-					const _this = this;
-					this.element.addEventListener('click',(e)=>{
-						_this.onClick();
-					});
+					this.values = originalValues;
 					
-					this.element.addEventListener('mousemove', (e)=>{
-						
-						
+				}
+				return false;
+			}
+			getState() {
+				return `${this.selected ? 1 : 0}${this.valid ? 1 : 0}`;
+			}
+			toggleSelect() {
+				this.selected = !this.selected;
 
-						if(!_this.initial && e.buttons == 1)
-							_this.select();
-						else if(!_this.initial && e.buttons == 2)
-							_this.deSelect();
-						else
-							_this.app.pushState()
+				if (this.selected) {
+					this.select();
+					//this.element.classList.add('sudoku-cell-selected');
+				} else {
+					this.deSelect();
+					//this.element.classList.remove('sudoku-cell-selected');
+				}
+				this.update();
+				return this.selected;
 
-					});
 
-					this.element.addEventListener('mouseexit', (e)=>{
-						if(!e.buttons){
-					//		_this.app.pushState();
-						}
-					});
-					this.element.addEventListener('contextmenu',(e)=>{
-						e.preventDefault();
-						
-						if(!_this.initial && _this.selected){
+			}
+			async addNumber(value) {
+				this.values.pop(value);
+				this.values.push(value);
+				this.value = Number(value);
+				const _this = this;
+				window.requestAnimationFrame(() => {
+					this.element.textContent = this.value == 0 ? "" : String(this.value);
+					
+				})
+				this.validate();
+				//this.update();
+
+
+			}
+			onClick() {
+				//this.
+				if (!this.initial)
+					this.toggleSelect();
+				//this.app.onCellClick(this)
+			}
+			deSelect() {
+				this.selected = false;
+				this.element.classList.remove('sudoku-cell-selected');
+			}
+			select() {
+				
+				this.selected = true;
+				this.element.classList.add('sudoku-cell-selected');
+
+			}
+			validateBox(){
+				let startRow = this.row - this.row % (9 / 3);
+				let startCol = this.col - this.col % (9 / 3);
+    for (let i = startRow; i < 9 / 3; i++) {
+        for (let j = startCol; j < 9 / 3; j++) {
+            let fieldIndex = (i * 9) + j;
+			console.info(fieldIndex);
+			if (this.app.cells[fieldIndex].value == this.value) {
+                return false;
+            }
+        }
+		return true
+    }
+		return true;
+			}
+			isValid() {
+				const _this = this;
+				this.valid = !this.value && (!this.app.cells.filter(cell => {
+					return cell.value != 0 &&
+						cell != _this &&
+						(cell.row == _this.row || cell.col == _this.col) &&
+						cell.value == _this.value;
+				}).length && this.validateBox()); //&& !this.app.getBoxValues(this.name).indexOf(this.value) == -1);
+				return this.valid;
+			}
+			update() {
+				if (this.selected)
+					this.select()
+				else
+					this.deSelect()
+				this.app.cells.forEach(cell => {
+					cell.validate()
+				})
+				this.element.textContent = this.value ? String(this.value) : "";
+
+			}
+			validate() {
+				if (this.isValid() || !this.value) {
+					this.element.classList.remove('sudoku-cell-invalid');
+				} else {
+					this.element.classList.add('sudoku-cell-invalid');
+				}
+				return this.valid;
+			}
+			destructor() {
+				//this.container.delete();
+			}
+			constructor(app, row, col) {
+				this.app = app;
+				this.container = document.importNode(cell_template.content, true);
+				this.row = row;
+				this.col = col;
+				this.selected = false;
+				this.letter = "abcdefghi"[row];
+				this.name = `${this.letter}${this.col}`
+				this.value = 0;
+				this.values = [];
+				this.element = this.container.querySelector('.cell-content');
+				this.valid = true;
+				const _this = this;
+				this.element.addEventListener('click', (e) => {
+					_this.onClick();
+				});
+
+				this.element.addEventListener('mousemove', (e) => {
+
+
+
+					if (!_this.initial && e.buttons == 1)
+						_this.select();
+					else if (!_this.initial && e.buttons == 2)
 						_this.deSelect();
-						}else{
-						 	_this.values.pop(_this.value);
-							_this.addNumber(0);
-							_this.deSelect();
-							_this.update();
-							//_this.app.deSelectAll();
-						}
-					});
-				}
+					else
+						_this.app.pushState()
 
-				redraw(){
-					
-				}
-				render(container){
-					container.appendChild(this.container);
-				}
-				toString(){
-					return `${this.row}:${this.col}`
-				}
+				});
+
+				this.element.addEventListener('mouseexit', (e) => {
+					if (!e.buttons) {
+						//		_this.app.pushState();
+					}
+				});
+				this.element.addEventListener('contextmenu', (e) => {
+					e.preventDefault();
+
+					if (!_this.initial && _this.selected) {
+						_this.deSelect();
+					} else {
+						_this.values.pop(_this.value);
+						_this.addNumber(0);
+						_this.deSelect();
+						_this.update();
+						//_this.app.deSelectAll();
+					}
+				});
 			}
-			class SudokuParser {
-				app = null
-				element = null
-				container = null
-				blank = true
-				content = ''
-				size = 9
-				constructor(app,container){
-					//this.container = container;
-					this.app = app;
-					this.container = document.importNode(sudokuParserTemplate.content,true);
-					this.element = document.createElement('div');
-					this.element.style.width = '90%';
-					this.element.style.height = '50%';
-					this.element.border = '1px solid #CCCCCC';
-					this.content = '';
-					this.cells = []
-					this.element.contentEditable = true;
-					this.element.textContent = 'Paste puzzle here';//this.container.querySelector('.parser-content');
-					this.toggle();
-					this.blank = true;
-					const _this = this;
-					this.element.addEventListener('click',(e)=>{
-						if(_this.blank)
-						_this.element.textContent = '';
-						_this.blank = false;
 
-					});
-					this.element.addEventListener('contextmenu',(e)=>{
-						if(_this.blank)
-						_this.element.textContent = '';
-						this.blank = false;
-					
+			redraw() {
 
-					});
-					this.element.addEventListener('input',(e)=>{
-						_this.element.innerHTML = this.element.textContent;
-						_this.parseAndApply();
-					});
-					this.element.addEventListener('keyup',(e)=>{
-						//_this.parseAndApply();
-					});
-					container.appendChild(this.element);
-				}	
-				parseAndApply(){
-					this.parse();
-					this.apply();
-				}
-				parse(){
-					const content = this.element.textContent;
-					const regex = /\d/g;
-					const matches = [...content.matchAll(regex)];
-					let row = 0;
-					let col = 0;
-					const cells = []
-					const max = this.size*this.size;
-					
-					matches.forEach(match => {
-						if(row*col == max){
-							return;
-						}
-						if(col == 9){
-						    row++;
-						    col = 0;
-						}
-						if(row == 9){
-						    row = 0;
-						    col = 0;
-						}
-					    const digit = match[0];
-					    const cell = new Cell(this.app,row,col);
-					    console.info(row,col);
-						cell.addNumber(digit);
-					    cell.initial = true;
-					    cells.push(cell);
-					    col++;
-					});
-					this.cells = cells;
-				}
-				apply(){
-					this.app.cells.forEach(cell=>{
-						cell.initial = false;
-						cell.number = 0;
-						cell.numbers = [];
-						cell.addNumber(0);
-					});
-					this.cells.forEach(cell=>{
-						console.info(cell.name);
-						const appCell = this.app.getCellByName(cell.name);
-						appCell.initial = cell.value != 0;
-						appCell.addNumber(cell.value);
-
-					});
-					this.toggle();
-				}
-				toggle(){
-					if(this.element.style.display == 'none'){
-						this.element.innerHTML = 'Paste here your puzzle';
-					}
-					this.element.style.display = this.element.style.display != 'none' ? 'none' : 'block';
-					
-				}
 			}
-			class Sudoku {
-				cells = [];
-				game_size = 0;
-				cell_count = 0;
-				selectedCells = []
-				container = null
-				element = null
-				states = []
-				previousSelection = []
-				state_number = 1
-				parser = null;
-				loadSession(){
-					const session = this.getSession();
-					if(!session)
-						return null;
-					this.state_number = session.state_number;
-					this.states = session.states.map(state=>{
-						return new State(state);
-					});
-					this.refreshState();
+			render(container) {
+				container.appendChild(this.container);
+			}
+			toString() {
+				return `${this.row}:${this.col}`
+			}
+		}
+		class SudokuParser {
+			app = null
+			element = null
+			container = null
+			blank = true
+			content = ''
+			size = 9
+			constructor(app, container) {
+				//this.container = container;
+				this.app = app;
+				this.container = document.importNode(sudokuParserTemplate.content, true);
+				this.element = document.createElement('div');
+				this.element.style.width = '90%';
+				this.element.style.height = '50%';
+				this.element.border = '1px solid #CCCCCC';
+				this.content = '';
+				this.cells = []
+				this.element.contentEditable = true;
+				this.element.textContent = 'Paste puzzle here';//this.container.querySelector('.parser-content');
+				this.toggle();
+				this.blank = true;
+				const _this = this;
+				this.element.addEventListener('click', (e) => {
+					if (_this.blank)
+						_this.element.textContent = '';
+					_this.blank = false;
 
-				}
-				getSession(){
-					const session = localStorage.getItem('session');
-					if(!session){
-						return null
+				});
+				this.element.addEventListener('contextmenu', (e) => {
+					if (_this.blank)
+						_this.element.textContent = '';
+					this.blank = false;
+
+
+				});
+				this.element.addEventListener('input', (e) => {
+					_this.element.innerHTML = this.element.textContent;
+					_this.parseAndApply();
+				});
+				this.element.addEventListener('keyup', (e) => {
+					//_this.parseAndApply();
+				});
+				container.appendChild(this.element);
+			}
+			parseAndApply() {
+				this.parse();
+				this.apply();
+			}
+			parse() {
+				const content = this.element.textContent;
+				const regex = /\d/g;
+				const matches = [...content.matchAll(regex)];
+				let row = 0;
+				let col = 0;
+				const cells = []
+				const max = this.size * this.size;
+
+				matches.forEach(match => {
+					if (row * col == max) {
+						return;
 					}
-					return JSON.parse(session);
-				}
-									saveSession(){
-						this.pushState();
-						const states = this.states.map(state=>{
-							return state.toJson()
-						});
-						const session = {
-							state_number: this.state_number,
-							states: states
-						}
-						localStorage.setItem('session',JSON.stringify(session));
-						console.info('session saved');
+					if (col == 9) {
+						row++;
+						col = 0;
 					}
-				getBoxValues(cell_name){
-					let values = this.cells.filter(cell=>{
-						return cell.name != cell_name && cell.name[0] == cell_name[0]
-					}).map(cell=>{
-						return cell.value
-					});
-					return values;
-				}
-				toggle(){
-					this.container.style.display = this.container.style.display != 'none' ? 'none' : 'block';
-				}
-				toggleParser(){
-					
-						//this.parser.toggle();
-					this.deSelectAll();
-					this.parser.toggle()
-
-				}
-				constructor(container,game_size){
-					
-					const _this = this;
-					this.container = container
-					this.element = container
-
-					this.parser = new SudokuParser(this,this.container);
-					this.game_size = game_size;
-					this.cell_count = game_size * game_size;
-					for(let row = 0; row < this.game_size; row++){
-						for(let col = 0; col < this.game_size; col++){
-							this.cells.push(new Cell(this,row,col));
-						}
+					if (row == 9) {
+						row = 0;
+						col = 0;
 					}
-					
-					this.loadSession();
-					document.addEventListener('keypress',(e)=>{
+					const digit = match[0];
+					const cell = new Cell(this.app, row, col);
+					cell.addNumber(digit);
+					cell.initial = true;
+					cells.push(cell);
+					col++;
+				});
+				this.cells = cells;
+			}
+			apply() {
+				this.app.cells.forEach(cell => {
+					cell.initial = false;
+					cell.number = 0;
+					cell.numbers = [];
+					cell.addNumber(0);
+				});
+				this.cells.forEach(cell => {
+					const appCell = this.app.getCellByName(cell.name);
+					appCell.initial = cell.value != 0;
+					appCell.addNumber(cell.value);
 
-						if(!isNaN(e.key) || e.key == 'd'){
-							let number = e.key == 'd' ? 0 : Number(e.key);
-							_this.addNumberToSelection(number);
-							//console.info({set:Number(e.key)});
-						}
-						if(e.key == 'p'){
-							_this.toggleParser();
-						}
-						if(e.key == 'u'){
-							_this.popState();
-						}
-						if(e.key == 'r'){
-							if(this.selection().length){
-								this.pushState();
+				});
+				this.toggle();
+			}
+			toggle() {
+				if (this.element.style.display == 'none') {
+					this.element.innerHTML = 'Paste here your puzzle';
+				}
+				this.element.style.display = this.element.style.display != 'none' ? 'none' : 'block';
+
+			}
+		}
+		class Sudoku {
+			cells = [];
+			game_size = 0;
+			cell_count = 0;
+			selectedCells = []
+			container = null
+			element = null
+			states = []
+			previousSelection = []
+			state_number = 1
+			parser = null;
+			status = null;
+			reset(){
+				this.cells.forEach(cell=>{
+					cell.values = []
+					cell.selected = false;
+					cell.addNumber(0);
+				})	
+			}
+			loadSession() {
+				const session = this.getSession();
+				if (!session)
+					return null;
+				this.state_number = session.state_number;
+				this.states = session.states.map(state => {
+					return new State(state);
+				});
+				this.refreshState();
+
+			}
+			
+			async getEmptyCell(){
+				return this.cells.filter(cell=>{
+					if(cell.value == 0)
+						return true
+					return false 
+				})[0]
+			}
+			async solve() {
+				const cell = await this.getEmptyCell();
+				if(!cell)
+					return this.isValid();
+				return await cell.solve();
+			}
+			deleteSession(){
+				localStorage.removeItem('session');
+			}
+			getSession() {
+				const session = localStorage.getItem('session');
+				if (!session) {
+					return null
+				}
+				return JSON.parse(session);
+			}
+			saveSession() {
+				this.pushState();
+				const states = this.states.map(state => {
+					return state.toJson()
+				});
+				const session = {
+					state_number: this.state_number,
+					states: states
+				}
+				localStorage.setItem('session', JSON.stringify(session));
+				//console.info('session saved');
+			}
+			getBoxValues(cell_name) {
+				let values = this.cells.filter(cell => {
+					return cell.name != cell_name && cell.name[0] == cell_name[0]
+				}).map(cell => {
+					return cell.value
+				});
+				return values;
+			}
+			toggle() {
+				this.container.style.display = this.container.style.display != 'none' ? 'none' : 'block';
+			}
+			toggleParser() {
+
+				//this.parser.toggle();
+				this.deSelectAll();
+				this.parser.toggle()
+
+			}
+			constructor(container, game_size) {
+				const _this = this;
+				this.container = container
+				this.element = container
+
+				this.parser = new SudokuParser(this, this.container);
+				this.game_size = game_size;
+				this.cell_count = game_size * game_size;
+				for (let row = 0; row < this.game_size; row++) {
+					for (let col = 0; col < this.game_size; col++) {
+						this.cells.push(new Cell(this, row, col));
+					}
+				}
+				console.info("Loading session");
+				setTimeout(()=>{
+					if(_this.status == "applying state"){
+						_this.deleteSession();
+						window.location.reload();
+					}else{
+						console.info("Finished session validation");
+					}
+				},10000);
+				this.loadSession();
+				document.addEventListener('keypress', (e) => {
+
+					if (!isNaN(e.key) || e.key == 'd') {
+						let number = e.key == 'd' ? 0 : Number(e.key);
+						_this.addNumberToSelection(number);
+						//console.info({set:Number(e.key)});
+					}
+					if (e.key == 'p') {
+						_this.toggleParser();
+					}
+					if (e.key == 'u') {
+						_this.popState();
+					}
+					if (e.key == 'r') {
+						if (this.selection().length) {
+							this.pushState();
 							_this.deSelectAll();
-							}else{
-								let state = this.getLastState();
-								if(state){
-									state.cells.filter(cell=>cell.selected).forEach(cell=>{
-										
-										this.getCellByName(cell.name).select();
-									})
-								}
+						} else {
+							let state = this.getLastState();
+							if (state) {
+								state.cells.filter(cell => cell.selected).forEach(cell => {
+
+									this.getCellByName(cell.name).select();
+								})
 							}
 						}
-					});
-					this.element.addEventListener('mousemove',(e)=>{
-						//this.pushState();
-					})
-					document.addEventListener('dblclick',(e)=>{
-						_this.previousSelection = _this.selection();
-						_this.cells.forEach(cell=>{
-							cell.deSelect();
-						});
-					});
-					document.addEventListener('contextmenu',(e)=>{
-					
-					});
-					this.element.addEventListener('mouseexit', (e)=>{
-						// Edge case while holding mouse button while dragging out. Should save state
-							_this.pushState();
-					});
-					this.element.addEventListener('mouseup', (e)=>{
-						_this.pushState();
-					});
-					this.pushState()	
-				
-				}
-				isValid(){
-					return this.cells.filter(cell=>!cell.isValid()).length == 0
-				}
-				createState(){
-					const state = new State(this.state_number)
-					let selectedCount = 0;
-					state.cells = this.cells.map(cell=>{
-						if(cell.selected){
-							selectedCount++;
-						}
-						return {name:cell.name,values:cell.values,value:cell.value,selected:cell.selected,state:cell.getState()}
-					
-					});
-					state.selectedCount = selectedCount;
-					return state;
-				}
-				pushState() {
-					const state = this.createState();
-					const previousState = this.getLastState();
-					if(!previousState || !previousState.equals(state)){	
-						this.states.push(state);
-						this.state_number++;
-						this.saveSession();			
-						console.info({pushState:state.getHash(),length:state.getHash().length,number:state.number});
 					}
-				}
-				refreshState(){
-					const state = this.getLastState();
-					if(!state)
-						return null;
-					this.applyState(state)
-					return state;
-				}
-				getLastState(){
-					return this.states.length ? this.states.at(this.states.length - 1) : null; 
-				}
-				applyState(state){
-					state.cells.forEach(stateCell=>{
-						const cell = this.getCellByName(stateCell.name);
-						cell.selected = stateCell.selected;
-						cell.values = stateCell.values;
-						cell.value = stateCell.value;
-						cell.update();
-					})
-
-				}
-				popState(){
-					let state = this.states.pop();
-					
-					if(!state)
-						return;
-					if(state.equals(this.createState())){
-						return this.popState();
-					}
-					
-					this.applyState(state);
-					this.saveSession();
-					console.info({popState:state.getHash(),length:state.getHash().length,number:state.number});
-				}
-				getCellByName(name){
-					return this.cells.filter(cell=>{
-						return cell.name == name
-					})[0]
-				}
-				deSelectAll(){
-					this.cells.forEach(cell=>{
+				});
+				this.element.addEventListener('mousemove', (e) => {
+					//this.pushState();
+				})
+				document.addEventListener('dblclick', (e) => {
+					_this.previousSelection = _this.selection();
+					_this.cells.forEach(cell => {
 						cell.deSelect();
 					});
-				}
-				selection() {
-					return this.cells.filter(cell=>{
-						return cell.selected
-					});
-				}
-				onSelectionToggle() {
-					
-				}
-				addNumberToSelection(number){
-					const _this = this;
-					this.pushState();
-					this.selection().forEach((cell)=>{
-						
+				});
+				document.addEventListener('contextmenu', (e) => {
 
-
-						cell.addNumber(number)
-					        cell.update();	
-
-					})
+				});
+				this.element.addEventListener('mouseexit', (e) => {
+					// Edge case while holding mouse button while dragging out. Should save state
 					_this.pushState();
-					if(this.isValid()){
-						this.deSelectAll();
-					}
-					_this.pushState();	
-				}
-				onCellDblClick(cell){
-					this.previousSelection = this.selection();
-					this.popState()
-					let originalSelected = this.selctedCells
-					if(cell.selected){
-						this.selectedCells.push(cell);
-					}else{
-						this.selectedCells.pop(cell);
-					}
-					if(!this.originalSelected != this.selectedCells)
-					{
-						this.popState();
-					}
-					//console.info({selected:this.selectedCells});
-				}
-				render(){
-					
+				});
+				this.element.addEventListener('mouseup', (e) => {
+					_this.pushState();
+				});
+				this.pushState()
 
-					this.cells.forEach(cell=>{
-						cell.render(this.element);
-					});
+			}
+			isValid() {
+				return this.cells.filter(cell => !cell.isValid()).length == 0
+			}
+			createState() {
+				const state = new State(this.state_number)
+				let selectedCount = 0;
+				state.cells = this.cells.map(cell => {
+					if (cell.selected) {
+						selectedCount++;
+					}
+					return { name: cell.name, values: cell.values, value: cell.value, selected: cell.selected, state: cell.getState() }
+
+				});
+				state.selectedCount = selectedCount;
+				return state;
+			}
+			pushState() {
+				const state = this.createState();
+				const previousState = this.getLastState();
+				if (!previousState || !previousState.equals(state)) {
+					this.states.push(state);
+					this.state_number++;
+					this.saveSession();
+					//console.info({ pushState: state.getHash(), length: state.getHash().length, number: state.number });
 				}
 			}
-			const sudoku = new Sudoku(container,9);
-			sudoku.render();
-			const app = sudoku;
-			/*
-			document.addEventListener('contextmenu',(e)=>{
-				e.preventDefault();
-			});*/
-			/*
-			for(let i = 0; i < game_size*game_size; i++){
-				const cell = document.importNode(cell_template.content,true);
+			refreshState() {
+				const state = this.getLastState();
+				if (!state)
+					return null;
+				this.applyState(state)
+				return state;
+			}
+			getLastState() {
+				return this.states.length ? this.states.at(this.states.length - 1) : null;
+			}
+			applyState(state) {
+				this.status = "applying state";
+				state.cells.forEach(stateCell => {
+					const cell = this.getCellByName(stateCell.name);
+					cell.selected = stateCell.selected;
+					cell.values = stateCell.values;
+					cell.value = stateCell.value;
+					cell.update();
+				})
+				this.status = "applied state"
 
-				app.appendChild(cell);	
-			}*/
-			//document.body.appendChild(app);
-		</script>
-	</body>
+			}
+			popState() {
+				let state = this.states.pop();
+
+				if (!state)
+					return;
+				if (state.equals(this.createState())) {
+					return this.popState();
+				}
+
+				this.applyState(state);
+				this.saveSession();
+				//console.info({ popState: state.getHash(), length: state.getHash().length, number: state.number });
+			}
+			getCellByName(name) {
+				return this.cells.filter(cell => {
+					return cell.name == name
+				})[0]
+			}
+			deSelectAll() {
+				this.cells.forEach(cell => {
+					cell.deSelect();
+				});
+			}
+			selection() {
+				return this.cells.filter(cell => {
+					return cell.selected
+				});
+			}
+			onSelectionToggle() {
+
+			}
+			addNumberToSelection(number) {
+				const _this = this;
+				this.pushState();
+				this.selection().forEach((cell) => {
+
+
+
+					cell.addNumber(number)
+					cell.update();
+
+				})
+				_this.pushState();
+				if (this.isValid()) {
+					this.deSelectAll();
+				}
+				_this.pushState();
+			}
+			onCellDblClick(cell) {
+				this.previousSelection = this.selection();
+				this.popState()
+				let originalSelected = this.selctedCells
+				if (cell.selected) {
+					this.selectedCells.push(cell);
+				} else {
+					this.selectedCells.pop(cell);
+				}
+				if (!this.originalSelected != this.selectedCells) {
+					this.popState();
+				}
+				//console.info({selected:this.selectedCells});
+			}
+			render() {
+
+
+				this.cells.forEach(cell => {
+					cell.render(this.element);
+				});
+			}
+		}
+		const sudoku = new Sudoku(container, 9);
+		
+		sudoku.render();
+		const app = sudoku;
+		/*
+		document.addEventListener('contextmenu',(e)=>{
+			e.preventDefault();
+		});*/
+		/*
+		for(let i = 0; i < game_size*game_size; i++){
+			const cell = document.importNode(cell_template.content,true);
+
+			app.appendChild(cell);
+		}*/
+		//document.body.appendChild(app);
+	</script>
+</body>

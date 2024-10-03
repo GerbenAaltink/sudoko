@@ -1,4 +1,5 @@
-#include <rlib.h>
+#include "rlib.h"
+#include "rsolve.h"
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -34,20 +35,7 @@ int * example_grid(int identifier){
     return &grid;
 }
 
-unsigned int count_neighbors(int grid[N][N], int row, int col) {
-    unsigned int count = 0;
-    for(int i = 0; i < row; i++){
-        for(int j = 0; j < N; j++){
-            if(grid[row][j] != 0 && j != col)
-                count++;
-        }
-        for(int j = 0; j < N; j++){
-            if(grid[j][col] != 0 && j != row)
-                count++;
-        }
-    }
-    return count;
-}
+
 
 void draw_cell(int c)
 {
@@ -195,26 +183,6 @@ bool get_easiest_cell2(int grid[N][N], unsigned int *easy_row, unsigned int *eas
 	}
 }
 
-bool get_easiest_cell(int grid[N][N], unsigned int * easy_row, unsigned int * easy_col){
-    unsigned int easy_neighbor_count = 0;
-    bool found = true;
-    for(int row = 0; row < N; row++){
-        for (int col = 0; col < N; col++){
-            if(grid[row][col] != 0){
-                continue;
-            }
-            unsigned ncount = count_neighbors(grid,row,col);
-            if(easy_neighbor_count <= ncount){
-                easy_neighbor_count = ncount;
-                *easy_row = row;
-                *easy_col = col;
-                found = true;
-                return true;
-            }
-        }
-    }
-    return false;
-}
 
 bool empty_spot_is_available(int grid[N][N]){
     for (unsigned int row = 0; row < N; row++) {

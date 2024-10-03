@@ -105,7 +105,7 @@ int * grid_with_minimal_complexity(thread_data_t * tdata){
         
     	tdata->start = nsecs();
 	//tdata->steps = 0;
-	tdata->result_complexity = _solve(grid,&tdata->steps,false);
+	tdata->result_complexity = rsolve(grid,&tdata->steps);
 	tdata->steps_total += tdata->steps;
 	tdata->steps = 0;
 	tdata->solved_count++;

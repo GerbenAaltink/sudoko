@@ -1,7 +1,7 @@
 all: build_and_run
 
 build_and_run:
-	gcc sudoku2.c -o sudoku -Wall -Wextra -pedantic
+	gcc sudoku.c -o sudoku -Wall -Wextra -pedantic
 	./sudoku
 
 gen1:

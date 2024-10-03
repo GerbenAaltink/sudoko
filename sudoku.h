@@ -13,27 +13,9 @@
 
 #define N 9
 
-unsigned int rand_int(int min, int max){
-    return rand() % (max - min + 1) + min;
-}
 
-int * example_grid(int identifier){
-    while(identifier == 4 || identifier == 2)
-       identifier = rand_int(0,9); 
-    static int grid[N][N] = {
-        {4, 2, 0, 0, 0, 1, 0, 0, 0},
-        {0, 0, 1, 0, 0, 0, 9, 0, 0},
-        {0, 0, 0, 3, 0, 0, 0, 8, 0},
-        {0, 0, 0, 0, 3, 0, 0, 0, 4},
-        {0, 0, 0, 0, 0, 7, 0, 0, 0},
-        {0, 0, 0, 0, 0, 0, 0, 0, 0},
-        {0, 0, 0, 0, 0, 0, 0, 0, 0},
-        {0, 0, 0, 0, 0, 0, 0, 0, 0},
-        {0, 0, 0, 0, 0, 0, 4, 2, 0}
-    };
-    grid[N-1][0] = identifier;
-    return &grid;
-}
+
+
 
 
 
@@ -151,10 +133,10 @@ int is_safe(int grid[N][N], int row, int col, int num) {
     return true;
 }
 
-void grid_reset(int grid[N][N]){
+void grid_reset(int * grid){
     memset(grid,0,N*N*sizeof(int));
 }
-int * grid_copy(int grid[N][N]){
+int * grid_copy(int * grid){
     int * new_grid = malloc(N*N*sizeof(int));
     memcpy(new_grid,grid,N*N*sizeof(int));
     return new_grid;
@@ -164,24 +146,7 @@ int * grid_new(){
     return (int *)calloc(sizeof(int),N*N);
 }
 
-bool get_easiest_cell2(int grid[N][N], unsigned int *easy_row, unsigned int *easy_col){
-	int highest_neighbor_count = 0;
-	bool found = false;
-	for(int row = 0; row < N; row++){
-	{
-		for(int col = 0; col < N; col++){
-			int neighbor_count = count_neighbors(grid,row,col);
-			if(neighbor_count > highest_neighbor_count){
-				highest_neighbor_count = neighbor_count;
-				*easy_row = row;
-				*easy_col = col;
-				found = true;
-			}
-		}
-	}
-	return found;
-	}
-}
+
 
 
 bool empty_spot_is_available(int grid[N][N]){
@@ -195,14 +160,13 @@ bool empty_spot_is_available(int grid[N][N]){
     return false;
 }
 
-unsigned int _solve(int grid[N][N], int *attempts, bool draw){
+unsigned long long _solve(int grid[N][N], unsigned long long *attempts, bool draw){
     (*attempts)++;
     unsigned int row, col;
     if(!get_easiest_cell(grid,&row,&col)){
         //print_grid(grid, false);
-        return attempts;
+        return *attempts;
     }
-    bool found = false;
     for(int num = 1; num < N + 1; num++){
         if(is_safe(grid,row,col,num)){
             grid[row][col] = num;
@@ -217,7 +181,7 @@ unsigned int _solve(int grid[N][N], int *attempts, bool draw){
     return 0;
 }
 
-unsigned int _solve2(int grid[N][N], int * attempts, bool draw) {
+unsigned int _solve2(int grid[N][N], unsigned long long * attempts, bool draw) {
     (*attempts)++;
     unsigned int row, col;
     bool emptySpot = false;
@@ -272,11 +236,11 @@ unsigned int _solve2(int grid[N][N], int * attempts, bool draw) {
     return 0;
 }
 unsigned int solve2(int grid[N][N], bool draw){
-    int attempts = 0;
+    unsigned long long attempts = 0;
     return _solve(grid,&attempts, draw);
 }
 
 unsigned int solve(int grid[N][N],bool draw) {
-    int attempts = 0;
+    unsigned long long attempts = 0;
     return _solve2(grid,&attempts, draw);
 }

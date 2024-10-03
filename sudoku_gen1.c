@@ -30,8 +30,8 @@ typedef struct thread_data_t {
     int puzzle[N][N];
     int solution[N][N];
     pthread_t thread;
-    ulong steps;
-    ulong steps_total;
+    unsigned long long  steps;
+    unsigned long long steps_total;
     uint complexity;
     uint result_complexity;
     uint solved_count; 
@@ -52,12 +52,7 @@ thread_data_t * thread_data_create(){
     return data;
 }
 void thread_data_free(thread_data_t * data){
-    if(data->puzzle){
-        free(data->puzzle);
-    }
-    if(data->solution){
-        free(data->solution);
-    }
+    
     free(data);
 }
 
@@ -82,9 +77,11 @@ void grid_set_random_free_cell(int grid[N][N]){
     }
     
 }
-void grid_set_random_free_cells(int grid[N][N], unsigned int count){
+/*************  ✨ Codeium Command ⭐  *************/
+/******  d0451618-cb5e-48cf-98b7-fb3f7884b12e  *******/
+void grid_set_random_free_cells(int * grid, unsigned int count){
     //grid[rand() % N][rand() % N] = rand() % N;
-    for (int i =0 ; i < count; i++){
+    for (uint i =0 ; i < count; i++){
         grid_set_random_free_cell(grid);
         //print_grid(grid,true);
         //printf("Generation: %d/%d\n", i + 1, count);
@@ -134,7 +131,8 @@ int * grid_with_minimal_complexity(thread_data_t * tdata){
     return grid_game;
 }
 
-void generate_game(thread_data_t * tdata){
+void * generate_game(void * arg){
+	thread_data_t * tdata = (thread_data_t *)arg;
     tick();
 	//unsigned int * result_complexity = (int *)calloc(sizeof(int),1);
     //unsigned int * result_initial_count = (int *)calloc(sizeof(int),1);
@@ -152,6 +150,7 @@ void generate_game(thread_data_t * tdata){
     tdata->duration = tdata->finish - tdata->start;
     tdata->is_done = true;
     },false);
+	return NULL;
 }
 
 void thread_data_to_json_object(rjson_t * json ,thread_data_t * data){
@@ -185,15 +184,14 @@ char * thread_data_to_json(thread_data_t * data, int runner_count){
 char * thread_data_to_string(thread_data_t * data){
 	static char result[4096];
 	memset(result,0,sizeof(result));
-	sprintf(result,"id:%d\ttotal solved: %d \tsteps total: %s\tsteps current: %s\tinitc: %d\ttime: %s\tDebug: %lld %lld",
+	sprintf(result,"id:%d\tcomplexity: %u\t total solved: %d \tsteps total: %s\tsteps current: %s\tinitc: %d\ttime: %s",
 		data->id,
+		data->result_complexity,
 		data->solved_count,
 		rtempc(rformat_number(data->steps_total + data->steps)),
 		rtempc(rformat_number(data->steps)),
 		data->result_initial_count,
-		format_time(nsecs() - data->start),
-		data->steps_total + data->steps,
-		data->steps
+		format_time(nsecs() - data->start)
 	);
 	return result;
 }
@@ -202,7 +200,7 @@ char * runner_status_to_string(thread_data_t * runners, unsigned int runner_coun
 	static char result[1024*1024];
 	memset(result,0,sizeof(result));
 	
-	for(int i = 0; i < runner_count; i++){
+	for(uint i = 0; i < runner_count; i++){
 		strcat(result,thread_data_to_string(&runners[i]));
 	       strcat(result,"\n");	
 	}
@@ -302,11 +300,12 @@ int request_handler_root(rhttp_request_t *r){
 		char response[1024*1024*3];
 		memset(response,0,sizeof(response));
 		sprintf(response,"HTTP/1.1 200 OK\r\n"
-				"Content-Length: %d\r\n"
+				"Content-Length: %zu\r\n"
 				"Content-Type: text/html\r\n"
-				"Connection: close:\r\n\r\n%s",
-				strlen(html),html);
+				"Connection: close:\r\n\r\n",
+				strlen(html));
 		rhttp_send_drain(r->c, response,0);
+		rhttp_send_drain(r->c, html,0);
 	},true);
 	return 1;
 	}
@@ -322,11 +321,11 @@ int request_handler_empty(rhttp_request_t * r){
 	       response[0] = 0;
        	        sprintf(
 			response, 
-			"HTTP/1.1 200 OK\r\nContent-Length:%ld\r\nConnection: close\r\n\r\n%s",
-			strlen(content),
-			content
+			"HTTP/1.1 200 OK\r\nContent-Length:%zu\r\nConnection: close\r\n\r\n",
+			strlen(content)
 		);	
 		rhttp_send_drain(r->c,response,0);
+		rhttp_send_drain(r->c,content,0);
 		return 1;
 	}
 	return 0;
@@ -336,7 +335,7 @@ int request_handler_404(rhttp_request_t *r){
 	char content[] = "HTTP/1.1 404 Document not found\r\nContent-Length:3\r\nConnection:close\r\n\r\n404";
 	rhttp_send_drain(r->c,content,0);
 	return 1;
-};
+}
 
 int request_handler(rhttp_request_t * r){
 	rhttp_request_handler_t request_handlers[] ={
@@ -362,7 +361,7 @@ void * serve_thread(void *arg){
 	return NULL;
 }
 
-unsigned int generate_games(unsigned int game_count, unsigned int timeout, unsigned int complexity){
+void generate_games(unsigned int game_count, unsigned int timeout, unsigned int complexity){
     pthread_t thread_serve; 
 
     
@@ -394,21 +393,18 @@ unsigned int generate_games(unsigned int game_count, unsigned int timeout, unsig
         pthread_create(&runners[i].thread,NULL,generate_game,(void *)(&runners[i]));
     }
     unsigned int highest_complexity = complexity;
-    nsecs_t time_start = nsecs();
     for(unsigned int i = 0; i < timeout; i++){
 	sleep(1);
 	WITH_MUTEX({
-        nsecs_t time_elapsed = nsecs() - time_start;
-        
         footer_printf("main");
         //pthread_mutex_lock(&lock);
-        for(int ithread = 0; ithread < game_count; ithread++){
+        for(unsigned int ithread = 0; ithread < game_count; ithread++){
             if(runners[ithread].is_done){
                 pthread_join(runners[ithread].thread,NULL);
                		
 		if(runners[ithread].result_complexity > highest_complexity){
          	highest_complexity = runners[ithread].result_complexity; 
-                  	for(int j = 0; j < game_count; j++){
+                  	for(uint j = 0; j < game_count; j++){
                         runners[j].complexity = highest_complexity;
                     
 			}
@@ -557,7 +553,7 @@ ONEINDIG?
 0 0 0 6 8 0 0 4 0 
 4 0 0 1 0 0 0 0 0 
 */
-    int grid_empty[N][N] = {
+    __attribute_maybe_unused__ int grid_empty[N][N] = {
         {0, 0, 0, 0, 0, 0, 0, 0, 0},
         {0, 0, 0, 0, 0, 0, 0, 0, 0},
         {0, 0, 0, 0, 0, 0, 0, 0, 0},

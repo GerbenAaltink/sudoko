@@ -5,6 +5,8 @@
 #include "rsolve.h"
 #define N 9
 
+
+
 int is_safe(int grid[N][N], int row, int col, int num)
 {
 	if (num == 0)
@@ -242,7 +244,7 @@ int main()
 	memset(grid, 0, N * N * sizeof(int));
 	clear();
 	printf("Paste grid in this format:\n");
-	print_grid(grid);
+	print_grid(example_grid(4));
 	// grid[8][8] = 9;
 	//	grid[8][8] = 8;
 	while (true)

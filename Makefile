@@ -1,11 +1,11 @@
 all: build_and_run
 
 build_and_run:
-	gcc sudoku.c -o sudoku -Wall -Wextra -pedantic
+	gcc sudoku.c -o sudoku -Wall -Wextra 
 	./sudoku
 
 gen1:
-	gcc sudoku_gen1.c -o sudoku_gen1 -Wall -Wextra -pedantic -Ofast
+	gcc sudoku_gen1.c -o sudoku_gen1 -Wall -Wextra -Ofast
 	./sudoku_gen1
 
 coverage:

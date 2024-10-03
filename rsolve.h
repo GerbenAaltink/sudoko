@@ -5,6 +5,28 @@
 #define RSOLVE_SIZE 9
 #endif 
 
+unsigned int rand_int(int min, int max){
+    return rand() % (max - min + 1) + min;
+}
+
+int * example_grid(int identifier){
+    while(identifier == 4 || identifier == 2)
+       identifier = rand_int(0,9); 
+    static int grid[RSOLVE_SIZE][RSOLVE_SIZE] = {
+        {4, 2, 0, 0, 0, 1, 0, 0, 0},
+        {0, 0, 1, 0, 0, 0, 9, 0, 0},
+        {0, 0, 0, 3, 0, 0, 0, 8, 0},
+        {0, 0, 0, 0, 3, 0, 0, 0, 4},
+        {0, 0, 0, 0, 0, 7, 0, 0, 0},
+        {0, 0, 0, 0, 0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0, 0, 4, 2, 0}
+    };
+    grid[RSOLVE_SIZE-1][0] = identifier;
+    return (int *)grid;
+}
+
 typedef struct rdigitsum_t {
     int count;
     int index;
@@ -17,21 +39,56 @@ int rdigitcmp(const void *a, const void *b) {
 }
 
 
+uint count_neighbors(int grid[RSOLVE_SIZE][RSOLVE_SIZE], int row, int col) {
+    unsigned int count = 0;
+    for(int i = 0; i < row; i++){
+        for(int j = 0; j < RSOLVE_SIZE; j++){
+            if(grid[row][j] != 0 && j != col)
+                count++;
+        }
+        for(int j = 0; j < RSOLVE_SIZE; j++){
+            if(grid[j][col] != 0 && j != row)
+                count++;
+        }
+    }
+    return count;
+}
+
+
+bool get_easiest_cell2(int grid[RSOLVE_SIZE][RSOLVE_SIZE], unsigned int *easy_row, unsigned int *easy_col){
+	int highest_neighbor_count = 0;
+	bool found = false;
+	for(int row = 0; row < RSOLVE_SIZE; row++){
+	{
+		for(int col = 0; col < RSOLVE_SIZE; col++){
+			int neighbor_count = count_neighbors(grid,row,col);
+			if(neighbor_count > highest_neighbor_count){
+				highest_neighbor_count = neighbor_count;
+				*easy_row = row;
+				*easy_col = col;
+				found = true;
+			}
+		}
+	}
+
+	}
+    	return found;
+}
 
 int * rdigitsum(int grid[RSOLVE_SIZE][RSOLVE_SIZE]){
 	rdigitsum_t digit_sums[10];
     static int sum[10];
-    for(int i = 0; i < sizeof(digit_sums) / sizeof(digit_sums[0]); i++){
+    for(size_t i = 0; i < sizeof(digit_sums) / sizeof(digit_sums[0]); i++){
         digit_sums[i].count = 0;
         digit_sums[i].index = i;
     }
-	for (int row = 0; row < RSOLVE_SIZE; row++){
-		for(int col = 0; col < RSOLVE_SIZE; col++){
+	for (uint row = 0; row < RSOLVE_SIZE; row++){
+		for(uint col = 0; col < RSOLVE_SIZE; col++){
 			digit_sums[grid[row][col]].count++;
 		}
 	}
 	qsort(digit_sums, sizeof(digit_sums) / sizeof(digit_sums[0]), sizeof(digit_sums[0]), rdigitcmp);
-    for(int i = 0; i < sizeof(digit_sums) / sizeof(digit_sums[0]); i++){
+    for(size_t i = 0; i < sizeof(digit_sums) / sizeof(digit_sums[0]); i++){
         sum[i] = digit_sums[i].index;
     }
     return sum;
@@ -75,21 +132,6 @@ int rsolve_check(int grid[RSOLVE_SIZE][RSOLVE_SIZE], int row, int col, int num)
 	return true;
 }
 
-unsigned int count_neighbors(int grid[RSOLVE_SIZE][RSOLVE_SIZE], int row, int col) {
-    unsigned int count = 0;
-    for(int i = 0; i < row; i++){
-        for(int j = 0; j < RSOLVE_SIZE; j++){
-            if(grid[row][j] != 0 && j != col)
-                count++;
-        }
-        for(int j = 0; j < RSOLVE_SIZE; j++){
-            if(grid[j][col] != 0 && j != row)
-                count++;
-        }
-    }
-    return count;
-}
-
 bool get_easiest_cell(int grid[RSOLVE_SIZE][RSOLVE_SIZE], unsigned int * easy_row, unsigned int * easy_col){
     unsigned int easy_neighbor_count = 0;
     bool found = true;
@@ -98,13 +140,13 @@ bool get_easiest_cell(int grid[RSOLVE_SIZE][RSOLVE_SIZE], unsigned int * easy_ro
             if(grid[row][col] != 0){
                 continue;
             }
-            unsigned ncount = count_neighbors(grid,row,col);
+            uint ncount = count_neighbors(grid,row,col);
             if(easy_neighbor_count <= ncount){
                 easy_neighbor_count = ncount;
                 *easy_row = row;
                 *easy_col = col;
                 found = true;
-                return true;
+                return found;
             }
         }
     }
@@ -119,7 +161,6 @@ unsigned int rsolve(int grid[RSOLVE_SIZE][RSOLVE_SIZE], unsigned long long *atte
         return *attempts;
     }
     int * counts = rdigitsum(grid);
-    bool found = false;
     for(int num = 0; num < RSOLVE_SIZE + 1; num++){
         int fieldNum = counts[num];
         if(fieldNum == 0)

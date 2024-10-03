@@ -42,10 +42,10 @@ void footer_get_cursor_position(int *rows, int *cols) {
 
     // Read the response: ESC [ rows ; cols R
     char buf[32];
-    int i = 0;
+    long unsigned int i = 0;
     char c = 0;
     while (c != 'R' && i < sizeof(buf) - 1) {
-        read(STDIN_FILENO, &c, 1);
+        __attribute_maybe_unused__ ssize_t bytes_read = read(STDIN_FILENO, &c, 1);
         buf[i++] = c;
     }
     buf[i] = '\0';
@@ -60,10 +60,14 @@ void footer_get_cursor_position(int *rows, int *cols) {
 }
 
 void _footer_set(unsigned int row, unsigned int col_count, char * text,unsigned int original_row,unsigned int original_col) {
-    char line[col_count];
-    memset(line,' ',col_count);
-    line[col_count - strlen(text)] = 0;
-    printf("\033[%d;%dH%s%s\033[%ld;%ldH",row,0,text,line,original_row,original_col);
+    char content[2048] = {0};
+    char line[1024];
+    memset(line,' ',sizeof(line) - 1);
+    char cursor_set_string[2048] = {0};
+    sprintf(cursor_set_string,"\e[%d;%dH",row,0);
+    sprintf(content,"%s%s%s\033[%u;%uH",cursor_set_string,text,line,original_row,original_col);
+    content[col_count + strlen(cursor_set_string) + 1] = 0;
+    printf(content);
 }
 void footer_printf(const char *format, ...) {
     if(footer_time_start == 0)
@@ -82,12 +86,12 @@ void footer_printf(const char *format, ...) {
     footer_get_cursor_position(&original_row, &original_col);
     footer_get_terminal_size(&row_count, &col_count);
     char text[1024] = {0};
-    char full_text[1024 * 3 + 1] = {0};
+    char full_text[4096] = {0};
     va_list args;
     va_start(args, format);
     vsprintf(text, format, args);
     va_end(args);
-    sprintf(full_text,"\rduration: %s - %s%s%s", format_time(time_elapsed), footer_prefix, text, footer_suffix);
+    sprintf(full_text,"\r%s - %s%s%s", format_time(time_elapsed), footer_prefix, text, footer_suffix);
     
     _footer_set(row_count,col_count,full_text,original_row,original_col);
     pthread_mutex_unlock(&footer_mutex);

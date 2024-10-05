@@ -7,37 +7,59 @@ function randInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function cssRuleExists(match){
+    for(let i = 0; i < document.styleSheets.length; i++){
+        let styleSheet = document.styleSheets[i]
+        let rules = styleSheet.cssRules
+        for(let j = 0; j < rules.length; j++){
+            let rule = rules[j]
+            if(rule.selectorText && rule.selectorText == match){
+                return true;
+            }
+        }
+    }
+    return false
+}
+
 class EventHandler {
     constructor() {
-        // An object to store events and their corresponding listeners
         this.events = {};
+        this.eventCount = 0;
+        this.suppresEvents = false;
+        this.debugEvents = false;
     }
-
-    // Method to add an event listener
     on(event, listener) {
-        // If the event doesn't exist, create an array for it
         if (!this.events[event]) {
-            this.events[event] = [];
+            this.events[event] = { name:name, listeners: [],callCount: 0};
         }
-
-        // Add the listener to the event's array
-        this.events[event].push(listener);
+        this.events[event].listeners.push(listener);
     }
-
-    // Method to remove an event listener
     off(event, listenerToRemove) {
         if (!this.events[event]) return;
-
-        // Filter out the listener to remove
-        this.events[event] = this.events[event].filter(listener => listener !== listenerToRemove);
+        this.events[event].listeners = this.events[event].listeners.filter(listener => listener !== listenerToRemove);
     }
-
-    // Method to emit an event and call all listeners
     emit(event, data) {
-        if (!this.events[event]) return;
-
-        // Call each listener for the event with the data
-        this.events[event].forEach(listener => listener(data));
+        if (!this.events[event]) return [];
+        if (this.suppresEvents) return [];
+        this.eventCount++;
+        const returnValue = this.events[event].listeners.map(listener =>{
+            var returnValue = listener(data)
+            if(returnValue == undefined)
+                return null
+            return returnValue
+        });
+        this.events[event].callCount++;
+        if(this.debugEvents){
+            console.debug('debugEvent',{event:event, arg:data, callCount: this.events[event].callCount, number:this.eventCount, returnValues:returnValue})
+        }
+        return returnValue
+    }
+    suppres(fn) {
+        const originallySuppressed = this.suppresEvents
+        this.suppresEvents = true 
+        fn(this)
+        this.suppresEvents = originallySuppressed
+        return originallySuppressed
     }
 }
 
@@ -55,12 +77,12 @@ class Col extends EventHandler {
         if (!this._value)
             return true;
         return this.row.puzzle.fields.filter(field => {
-            return field != this && !(
+            return (
                 field.index == this.index && field.value == this._value
                 ||
                 field.row.index == this.row.index && field.value == this._value)
 
-        })
+        }).filter(field => field != this).length == 0
     }
     select() {
         this.selected = true
@@ -71,7 +93,7 @@ class Col extends EventHandler {
     _isValidBox() {
         if (!this._value)
             return true;
-        let startRow = this.row.index - this.index % (this.row.puzzle.size / 3);
+        let startRow = this.row.index - this.row.index % (this.row.puzzle.size / 3);
         let startCol = this.index - this.index % (this.row.puzzle.size / 3);
         for (let i = 0; i < this.row.puzzle.size / 3; i++) {
             for (let j = 0; j < this.row.puzzle.size / 3; j++) {
@@ -84,19 +106,16 @@ class Col extends EventHandler {
         return true
     }
     validate() {
-        if (!this.row.puzzle.initialized) {
-            return true
+        if (!this.row.puzzle.initalized) {
+            return this.valid;
         }
         if (this.initial) {
-
             this.valid = true
             return this.valid
         }
-        if (!this.value) {
-            if (this.valid) {
-                this.emit('update', this)
-            }
+        if (!this.value && !this.valid) {
             this.valid = true
+            this.emit('update', this)
             return this.valid
         }
         let oldValue = this.valid
@@ -104,14 +123,16 @@ class Col extends EventHandler {
         if (oldValue != this.valid) {
             this.emit('update', this)
         }
-
         return this.valid
     }
     set value(val) {
         if (this.initial)
             return;
-        if (this._value != Number(val)) {
-            this._value = Number(val)
+        const digit = Number(val)
+        const validDigit = digit >= 0 && digit <= 9;
+        let update = validDigit && digit != this.value
+        if (update) {
+            this._value = Number(digit)
             this.validate()
             this.emit('update', this);
         }
@@ -125,6 +146,7 @@ class Col extends EventHandler {
     set selected(val) {
         if (val != this._selected) {
             this._selected = val
+            if(this.row.puzzle.initalized)
             this.emit('update', this);
         }
     }
@@ -133,18 +155,16 @@ class Col extends EventHandler {
         this.row = row
         this.index = this.row.cols.length
         this.id = this.row.puzzle.rows.length * this.row.puzzle.size + this.index;
-        this._initial = false
+        this.initial = false
+        this.selected = false
         this._value = 0;
         this.valid = true
     }
     update() {
-        this.validate()
+        this.emit('update',this)
     }
     toggleSelected() {
-        if (this.selected)
-            this.unselect()
-        else
-            this.select()
+        this.selected = !this.selected 
     }
     get data() {
         return {
@@ -212,10 +232,11 @@ class Puzzle extends EventHandler {
     states = []
     parsing = false
     _initialized = false
-    initialized = false
+    initalized = false
     _fields = null
     constructor(arg) {
         super()
+        this.debugEvents = true;
         this.initalized = false
         this.rows = []
         if (isNaN(arg)) {
@@ -232,25 +253,63 @@ class Puzzle extends EventHandler {
         }
         this._initialized = true
         this.initalized = true
+        this.commitState()
+    }
+    validate() {
+        return this.valid;
+    }
+    _onEventHandler(){
+        this.eventCount++;
+    }
+    makeInvalid() {
+        if (!app.valid) {
+            let invalid = this.invalid;
+            return invalid[invalid.length - 1];
+        }
+        this.rows.forEach(row => {
+            row.cols.forEach(col => {
+                if (col.value) {
+                    let modify = null;
+                    if (col.index == this.size) {
+                        modify = this.get(row.index, col.index - 2);
+                    } else {
+                        modify = this.get(row.index, col.index + 1);
+                    }
+                    modify.value = col.value
+                    // last one is invalid
+                    return modify.index > col.index ? modify : col;
+                }
+                col.valid = false
+            })
+        })
+        this.get(0, 0).value = 1;
+        this.get(0, 1).value = 1;
+        return this.get(0, 1);
     }
     reset() {
         this._initialized = false
+        this.initalized == false;
         this.parsing = true
         this.fields.forEach(field => {
-            field.value = 0
             field.initial = false
             field.selected = false
+            field.value = 0
         })
         this.hash = 0
         this.states = []
         this.parsing = false
+        this.initalized = true
         this._initialized = true
+        this.commitState()
     }
     get valid() {
         return this.invalid.length == 0
     }
     get invalid() {
-        return this.fields.filter(field => !field.valid)
+        this.emit('validating',this)
+        const result =  this.fields.filter(field => !field.validate())
+        this.emit('validated',this)
+        return result
     }
     get selected() {
         return this.fields.filter(field => field.selected)
@@ -259,7 +318,9 @@ class Puzzle extends EventHandler {
         this.emit('parsing', this)
         this.reset()
         this.parsing = true
+        this.initalized = false;
         this._initialized = false;
+
         const regex = /\d/g;
         const matches = [...content.matchAll(regex)]
         let index = 0;
@@ -269,13 +330,20 @@ class Puzzle extends EventHandler {
             let field = this.fields[index]
             field.value = digit;
             field.initial = digit != 0
-            field.update()
             index++;
         });
         this._initialized = true;
         this.parsing = false
+        this.deselect();
+        this.initalized = true;
+        this.suppres(()=>{
+            this.fields.forEach((field)=>{
+                field.update()
+        })
+    })
         this.commitState()
         this.emit('parsed', this)
+        this.emit('update',this)
     }
     get state() {
         return this.getData(true)
@@ -292,6 +360,8 @@ class Puzzle extends EventHandler {
     }
 
     commitState() {
+        if (!this.initalized)
+            return false;
         this.hash = this._generateHash()
         if (this.stateChanged) {
             this.states.push(this.state)
@@ -301,9 +371,13 @@ class Puzzle extends EventHandler {
         return false
     }
     onFieldUpdate(field) {
+        if (!this.initalized)
+            return false;
         if (!this._initialized)
             return;
-        this.commitState()
+        this.validate();
+        this.commitState();
+        this.emit('update', this)
     }
 
     get data() {
@@ -313,11 +387,16 @@ class Puzzle extends EventHandler {
     popState() {
         let prevState = this.previousState
         if (!prevState)
+        {
+            this.deselect()   
             return null
-        while (prevState && prevState.hash == this.state.hash)
+        }while (prevState && prevState.hash == this.state.hash)
             prevState = this.states.pop()
         if (!prevState)
+        {
+            this.deselect()
             return null
+        }
         this.applyState(prevState)
         this.emit('popState', this)
         return prevState
@@ -349,6 +428,12 @@ class Puzzle extends EventHandler {
         return result;
     }
     get(row, col) {
+        if (!this.initalized)
+            return null;
+        if (!this.rows.length)
+            return null;
+        if (!this.rows[row])
+            return null;
         return this.rows[row].cols[col];
     }
     get fields() {
@@ -393,17 +478,26 @@ class Puzzle extends EventHandler {
         return this.toString()
     }
     toString() {
-        return this.text.replaceAll("\n", "").replaceAll(" ", "0")
+        return this.text.replaceAll("\n","").replaceAll(" ", "0")
+    }
+    get humanFormat() {
+        return ' ' + this.text.replaceAll(" ", "0").split("").join(" ")
     }
     getRandomField() {
         const emptyFields = this.empty;
         return emptyFields[randInt(0, emptyFields.length - 1)]
     }
     update(callback) {
-        this._initialized = false
-        callback(this);
-        this._initialized = true
         this.commitState()
+        this.intalized = false
+        callback(this);
+        this.intalized = true
+        this.validate()
+        this.commitState()
+        this.intalized = false 
+        if(this.valid)
+            this.deselect()
+        this.intalized = true
         this.emit('update', this)
     }
     get empty() {
@@ -418,16 +512,18 @@ class Puzzle extends EventHandler {
     deselect() {
         this.fields.forEach(field => field.selected = false)
     }
-    generate(){
+    generate() {
         this.reset()
-        this.initialized = false
-        for(let i =0; i < 17; i++){
-            this.fillRandomEmptyField()
+        this.initalized = false
+        for (let i = 0; i < 17; i++) {
+            this.fillRandomField()
         }
-        this.states = []
+        this.deselect()
+        this.initalized = true
         this.commitState()
+        this.emit('update',this)
     }
-    fillRandomEmptyField() {
+    fillRandomField() {
         let field = this.getRandomEmptyField()
         if (!field)
             return
@@ -435,13 +531,13 @@ class Puzzle extends EventHandler {
         field.selected = true
         let number = 0
         number++;
-        
+
         while (number <= 9) {
-            field.value = number 
+            field.value = randInt(1, 9)
             field.update()
-            if(field.validate()){
+            if (this.validate()) {
                 field.initial = true
-                return field 
+                return field
             }
             number++;
         }
@@ -450,211 +546,255 @@ class Puzzle extends EventHandler {
 
 }
 
-let activePuzzle = null
-function puzzleToElement(puzzle, size, darkMode) {
-
-    const main = document.createElement('div');
-    //main.style.minWidth = '50px'
-    main.style.aspectRatio = '1/1';
-    main.classList.add('grid-container')
-    //main.style.aspectRatio = '1/1'
-    let fields = [];
-    let rows = [];
-    let syncEvents = [];
-    let fieldElements = [];
-    puzzle.rows.forEach((row) => {
-        rows.push(row)
-        row.cols.forEach((col) => {
-
-            const field = document.createElement('div');
-            field.style.fontSize = size.toString() + 'px'
-            field.classList.add('grid-item');
-            fields.push(col)
-            fieldElements.push(field);
-            //// field.setData('col',col);
-            // field.setData('row',row);
-            //field.setData('puzzle',puzzle);
-            // field.style.padding = '20px';
-            //  field.style.width = '50px'
-            //  field.style.border = '1px solid #ccc';
-            // field.style.textAlign = 'center'
-            // field.style.height = '10%'
-            //field.style.alignItems = 'center';
-            //field.style.alignContent = 'center';
-            //field.style.textAlign = 'center';
-            //field.style.aspectRatio = '1/1';
-            field.field = col
-            field.sync = function sync() {
-                field.classList.remove('sudoku-field-selected')
-                field.classList.remove('sudoku-field-empty')
-                field.classList.remove('sudoku-field-invalid')
-                field.textContent = field.field.value ? field.field.value.toString() : ''
-
-                if (field.field.selected) {
-                    field.classList.add('sudoku-field-selected')
-                    window.selected = field.field
-                }
-                if (!field.field.valid) {
-                    field.classList.add('sudoku-field-invalid')
-                }
-                if(!field.field.value)
-                {
-
-                field.classList.add('sudoku-field-empty')
-                }
-            }
-            col.on('update', (e) => {
-                field.sync();
-            })
-            syncEvents.push(field.sync)
-            field.sync()
-            field.addEventListener('click', (e) => {
-                col.toggleSelected()
-            })
-
-            //  row.appendChild(field)
-            main.appendChild(field)
-            main.toggleDarkMode =  (e)=>{
-                main.classList.toggle('sudoku-theme-dark')
-            }
-            main.addEventListener('mouseenter',(e)=>{
-                activePuzzle = puzzle
-            })
-        });
-    });
-    if(darkMode){
-        main.toggleDarkMode()
-    }
-    if(activePuzzle == null){
-    document.addEventListener('keydown', (e) => {
-        if (e.key == 'u') {
-            activePuzzle.popState();
-        } else if (e.key == 'd') {
-            activePuzzle.update((target) => {
-                activePuzzle.selected.forEach(field => {
-                    field.value = 0
-                });
-            })
-        } else if (e.key == 'a'){
-            function autoSolve() {
-            window.requestAnimationFrame(()=>{
-                if(activePuzzle.fillRandomEmptyField()){
-                    if(activePuzzle.empty.length)
-                        return autoSolve()
-                    else
-                        return true 
-                    return true 
-                }
-            })
-        }
-            autoSolve()
-        } else if (e.key == 'r') {
-            activePuzzle.fillRandomEmptyField();
-        } else if (!isNaN(e.key)) {
-            activePuzzle.update((target) => {
-                activePuzzle.selected.forEach(field => {
-                    field.value = Number(e.key)
-                })
-            });
-        }
-        //if(e.key == 'u'){
-        //    puzzle.popState()
-        //}
-    })
+class PuzzleManager {
+    constructor(size) {
+        this.size = size
+        this.puzzles = []
+        this._activePuzzle = null
     }
 
-    main.fieldElements = fieldElements;
-    main.fields = fields
-    main.rows = rows
-    let syncFn = () => {
-        syncEvents.forEach(fn => fn())
+    addPuzzle(puzzle){
+        this.puzzles.push(puzzle)
     }
-    main.syncEvents = syncFn
-
-    //  puzzle.on('update',(e)=>{
-    //    console.info('update');
-    //    main.syncEvents()
-    /// })
-    puzzle.on('update', (e) => {
-        console.info('updateEvent');
-        main.syncEvents()
-    })
-    main.sync = syncFn;
-    activePuzzle = puzzle
-    return main
-    //main.appendChild(row)
+    get active(){
+        return this.activePuzzle
+    }
+    set activePuzzle(puzzle){
+        this._activePuzzle = puzzle
+    }
+    get activePuzzle(){
+        return this._activePuzzle
+    }
 }
-let puzzles = []
+
+const puzzleManager = new PuzzleManager(9)
+
+class Sudoku extends HTMLElement {
+    styleSheet = `
+        .sudoku {
+            font-size: 13px;
+            color:#222;
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            grid-template-rows: auto;
+            gap: 0px;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            background-color: #e5e5e5;
+            border-radius: 5px;
+            aspect-ratio: 1/1;
+        }
+        .sudoku-field-initial {
+            color: #777;
+        }
+        .sudoku-field-selected {
+            background-color: lightgreen;
+        }
+        .sudoku-field-invalid {
+            color: red;
+        }
+        .sudoku-field {
+            border: 1px solid #ccc;
+            text-align: center;
+            padding: 2px;
+            aspect-ratio: 1/1;
+        }`
+    set fieldSize(val) {
+        this._fieldSize = val ? Number(val) : null
+        this.fieldElements.forEach(field => {
+            field.style.fontSize = this._fieldSize ? this._fieldSize.toString() +'px' : ''
+        })
+    }
+    get fieldSize(){
+        return this._fieldSize
+    }
+    get eventCount() {
+        return this.puzzle.eventCount
+    }
+    get puzzleContent(){
+        return this.puzzle.humanFormat
+    }
+    set puzzleContent(val) {
+        if (val == "generate") {
+            this.puzzle.generate()
+        } else if (val) {
+            this.puzzle.loadString(val)
+        } else {
+            this.puzzle.reset()
+        }
+    }
+    connectedCallback() {
+        this.puzzleContent = this.getAttribute('puzzle') ? this.getAttribute('puzzle') : null
+        this._fieldSize = null
+        this.fieldSize = this.getAttribute('size') ? this.getAttribute('size') : null
+        this.readOnly = this.getAttribute('read-only') ? true : false
+        this.attachShadow({ mode: 'open' });
+            this.shadowRoot.appendChild(this.styleElement)
+        this.shadowRoot.appendChild(this.puzzleDiv)
+    }
+    toString(){
+        return this.puzzleContent
+    }
+    set active(val){
+        this._active = val 
+        if(this._active)
+            this.manager.activePuzzle =this 
+    }
+    get active(){
+        return this._active
+    }
+    set readOnly(val){
+        this._readOnly = val ? true : false
+    }
+    get readOnly(){
+        return this._readOnly
+    }
+    constructor() {
+        super();
+        this._readOnly = false;
+        this._active = false
+        this.fieldElements = []
+        this.puzzle = new Puzzle(9)
+        this.fields = []
+        this.styleElement = document.createElement('style');
+        this.styleElement.textContent = this.styleSheet
+        this.puzzleDiv = document.createElement('div')
+        this.puzzleDiv.classList.add('sudoku');
+        this._bind()
+        this.manager.addPuzzle(this)
+    }
+    get manager() {
+        return puzzleManager
+    }
+    _bind(){
+        this._bindFields()
+        this._bindEvents()
+        this._sync()
+    }
+    _bindFields(){
+        const me = this
+        this.puzzle.rows.forEach((row) => {
+            row.cols.forEach((field) => {
+                const fieldElement = document.createElement('div');
+                fieldElement.classList.add('sudoku-field');
+                fieldElement.field = field
+                field.on('update', (field) => {
+                    me._sync()
+                })
+                fieldElement.addEventListener('click', (e) => {
+                    if(!me.readOnly)
+                        field.toggleSelected()
+                })
+                fieldElement.addEventListener('contextmenu',(e)=>{
+                    e.preventDefault()
+                        field.row.puzzle.update(()=>{
+                            field.selected = false
+                            field.value = 0
+                    })
+                })
+                this.fields.push(field)
+                this.fieldElements.push(fieldElement)
+                this.puzzleDiv.appendChild(fieldElement);
+            });
+        });
+    }
+    _bindEvents(){
+        const me = this
+        this.puzzle.on('update', () => {
+            me._sync()
+        });
+        this.puzzleDiv.addEventListener('mouseenter', (e) => {
+            me.active = true 
+        })
+        this.puzzleDiv.addEventListener('mouseexit', (e) => {
+            me.active = false 
+        })
+        document.addEventListener('keydown', (e) => {
+            if(me.readOnly)
+                return
+            if (!puzzleManager.active)
+                return
+            const puzzle = puzzleManager.active.puzzle
+            if (e.key == 'u') {
+                puzzle.popState();
+            } else if (e.key == 'd') {
+                puzzle.update((target) => {
+                    puzzle.selected.forEach(field => {
+                        field.value = 0
+                    });
+                })
+            } else if (e.key == 'a') {
+                puzzle.autoSolve()
+            } else if (e.key == 'r') {
+                puzzle.fillRandomField();
+            } else if (!isNaN(e.key)) {
+                puzzle.update((target) => {
+                    puzzle.selected.forEach(field => {
+                        field.value = Number(e.key)
+                    })
+                });
+            }
+        })
+    }
+    autoSolve() {
+        const me = this
+        window.requestAnimationFrame(() => {
+            if (me.fillRandomField()) {
+                if (me.empty.length)
+                    return me.autoSolve()
+            }
+        })
+    }
+    get(row, col){
+        return this.puzzle.get(row,col)
+    }
+    _syncField(fieldElement) {
+        const field = fieldElement.field 
+        fieldElement.classList.remove('sudoku-field-selected')
+        fieldElement.classList.remove('sudoku-field-empty')
+        fieldElement.classList.remove('sudoku-field-invalid')
+        fieldElement.classList.remove('sudoku-field-initial')
+        fieldElement.innerHTML = field.value ? field.value.toString() : '&nbsp;'
+        
+        if (field.selected) {
+            fieldElement.classList.add('sudoku-field-selected')
+            window.selected = field.field
+        }
+        if (!field.valid) {
+            fieldElement.classList.add('sudoku-field-invalid')
+        }
+        if (!field.value) {
+            fieldElement.classList.add('sudoku-field-empty')
+        }
+        if(field.initial){
+            fieldElement.classList.add('sudoku-field-initial')
+        }
+
+    }
+    _sync() {
+        this.fieldElements.forEach(fieldElement => {
+            this._syncField(fieldElement);
+        })
+    }
+
+}
+customElements.define("my-sudoku", Sudoku);
+
 function generateIdByPosition(element) {
     // Get the parent element
     const parent = element.parentNode;
-    
+
     // Get the index of the element within its parent
     const index = Array.prototype.indexOf.call(parent.children, element);
-    
+
     // Generate a unique ID using the tag name and index
     const generatedId = `${element.tagName.toLowerCase()}-${index}`;
-    
+
     // Assign the generated ID to the element
-    element.id = generatedId.replace('div-','session-key-');
-    
-    return element.id ;
+    element.id = generatedId.replace('div-', 'session-key-');
+
+    return element.id;
 }
 
-
-const renderPuzzleFromString = (str,size,darkMode) => {
-    const app = new Puzzle(9)
-    if(str)
-        app.loadString(str)
-    else
-        app.generate()
-    const appElement = puzzleToElement(app,size,darkMode);
-    
-    document.body.appendChild(appElement);
-    const id = generateIdByPosition(appElement);
-    appElement.id = id
-    console.info(id);
-    puzzles.push(appElement)
-    return appElement
-}
-
-const renderPuzzles = (size, darkMode)=>{
-    renderPuzzleFromString(null,size,darkMode)
-    
-}
-
-document.addEventListener('DOMContentLoaded', (e) => {
-    let size = randInt(4,20);
-    let darkMode = randInt(0,1);
-    renderPuzzleFromString(`0  0  8  0  9  0  0  0  0 
- 0  9  0  0  0  0  0  0  7 
- 0  0  0  0  2  0  0  0  0 
- 0  0  3  0  0  0  0  0  0 
- 5  0  0  0  8  0  0  0  0 
- 0  0  6  0  0  0  0  0  0 
- 0  0  0  0  0  3  9  0  0 
- 9  1  0  0  0  0  0  0  0 
- 0  0  0  0  1  0  0  0  0 `,size,darkMode)
-    renderPuzzleFromString(`2  3  8  1  9  7  4  5  6 
-        4  9  1  3  5  0  2  8  7 
-        6  5  0  0  0  0  1  3  9 
-        1  2  3  0  4  9  0  6  8 
-        5  7  9  6  8  1  3  2  4 
-        8  4  0  7  3  2  0  9  1 
-        7  8  4  2  6  3  9  1  5 
-        9  1  2  8  7  5  0  4  3 
-        3  6  5  9  1  4  8  7  0
-       `,size,darkMode)
-       renderPuzzleFromString(` 0  0  8  0  9  0  0  0  0 
-        0  9  0  0  0  0  0  0  7 
-        0  0  0  0  2  0  0  0  0 
-        0  0  3  0  0  0  0  0  0 
-        5  0  0  0  8  0  0  0  0 
-        0  0  6  0  0  0  0  0  0 
-        0  0  0  0  0  3  9  0  0 
-        9  1  0  0  0  0  0  0  0 
-        0  0  0  0  1  0  0  0  0`,size, darkMode)
-    for(let i = 0; i < 10; i++){
-    renderPuzzles(size,darkMode)
-   }
-});

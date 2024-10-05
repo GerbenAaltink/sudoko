@@ -7,43 +7,7 @@
 
 
 
-int is_safe(int grid[N][N], int row, int col, int num)
-{
-	if (num == 0)
-		return true;
-	for (int x = 0; x < N; x++)
-	{
 
-		if (grid[row][x] == num && col != x)
-		{
-			return false;
-		}
-	}
-	for (int x = 0; x < N; x++)
-	{
-		if (grid[x][col] == num && row != x)
-		{
-
-			return false;
-		}
-	}
-
-	// Check box
-	int startRow = row - row % (N / 3), startCol = col - col % (N / 3);
-	for (int i = 0; i < N / 3; i++)
-	{
-		for (int j = 0; j < N / 3; j++)
-		{
-			if (grid[i + startRow][j + startCol] == num && row != i + startRow && col != j + startCol)
-			{
-
-				return false;
-			}
-		}
-	}
-
-	return true;
-}
 
 void clear()
 {
@@ -62,20 +26,7 @@ void print_grid(int grid[N][N])
 	}
 }
 
-bool validate_grid(int grid[N][N])
-{
-	for (int row = 0; row < N; row++)
-	{
-		for (int col = 0; col < N; col++)
-		{
-			if (!is_safe(grid, row, col, grid[row][col]))
-			{
-				return false;
-			}
-		}
-	}
-	return true;
-}
+
 unsigned int solve2(int grid[N][N], unsigned long long *attempts)
 {
 	(*attempts)++;
@@ -102,7 +53,7 @@ unsigned int solve2(int grid[N][N], unsigned long long *attempts)
 		return true;
 	for (int num = 1; num <= 9; num++)
 	{
-		if (is_safe(grid, row, col, num))
+		if (ris_safe(grid, row, col, num))
 		{
 			grid[row][col] = num;
 
@@ -145,7 +96,7 @@ int solve(int grid[N][N], unsigned long long *steps)
 	for (int i = 1; i < 10; i++)
 	{
 
-		if (is_safe(grid, row, col, i))
+		if (ris_safe(grid, row, col, i))
 		{
 			grid[row][col] = i;
 
@@ -235,16 +186,37 @@ bool is_empty(int grid[N][N])
  0  8  0  0  0  2  0  0  0
  */
 
+/*
+4:16
+
+7 0 0 0 0 4 0 0 6 
+0 0 3 0 0 0 0 0 0 
+0 0 0 0 0 0 0 0 4 
+4 0 0 0 6 0 0 5 0 
+0 0 0 0 4 0 1 0 0 
+0 8 0 0 0 0 0 0 9 
+0 0 0 0 5 0 0 4 0 
+0 0 0 0 2 0 0 6 0 
+0 0 0 7 0 0 0 0 0 
+*/
+
 
 
 int main()
 {
+
+RBENCH(1000000,{
+         int * g = rgenerate_puzzle(17);
+		 free(g);  
+        })
+	srand(time(NULL));
 	setbuf(stdout, 0);
 	int grid[N][N];
 	memset(grid, 0, N * N * sizeof(int));
 	clear();
+	int * ex_grid = rgenerate_puzzle(17);
 	printf("Paste grid in this format:\n");
-	print_grid(example_grid(4));
+	print_grid(ex_grid);
 	// grid[8][8] = 9;
 	//	grid[8][8] = 8;
 	while (true)
@@ -254,7 +226,7 @@ int main()
 			{
 				printf("Invalid grid\n");
 			}
-		if (validate_grid(grid))
+		if (rvalidate_grid(grid))
 		{
 			break;
 		}

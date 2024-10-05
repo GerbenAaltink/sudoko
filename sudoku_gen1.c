@@ -56,37 +56,6 @@ void thread_data_free(thread_data_t * data){
     free(data);
 }
 
-void grid_set_random_free_cell(int grid[N][N]){
-    int rn, row, col;
-    
-    while(true){
-    rn = (rand() % N) + 1;
-    row = rand() % N;
-    col = rand() % N;
-    
-    while(grid[row][col] != 0){
-        row = rand() % N;
-        col = rand() % N;
-    }
-   // printf("CHECK %d:%d:%d\n",row,col,rn);
-        if(is_safe(grid,row,col, rn)){
-           // printf("CHECKED\n");
-             grid[row][col] = rn;
-             break;
-        }
-    }
-    
-}
-/*************  ✨ Codeium Command ⭐  *************/
-/******  d0451618-cb5e-48cf-98b7-fb3f7884b12e  *******/
-void grid_set_random_free_cells(int * grid, unsigned int count){
-    //grid[rand() % N][rand() % N] = rand() % N;
-    for (uint i =0 ; i < count; i++){
-        grid_set_random_free_cell(grid);
-        //print_grid(grid,true);
-        //printf("Generation: %d/%d\n", i + 1, count);
-    }
-}
 
 
 int * grid_with_minimal_complexity(thread_data_t * tdata){
@@ -111,7 +80,8 @@ int * grid_with_minimal_complexity(thread_data_t * tdata){
 			//exit(5);
 			//footer_printf("thread %d failed validation",tdata->id);
         }else{
-            //footer_printf("thread %d solved: %d",tdata->id, tdata->result_complexity);
+           
+		    //footer_printf("thread %d solved: %d",tdata->id, tdata->result_complexity);
         }
 	//if(tdata->solution)
 	//	free(tdata->solution);
@@ -120,11 +90,13 @@ int * grid_with_minimal_complexity(thread_data_t * tdata){
 	
 	WITH_MUTEX({
 	memcpy(tdata->solution,grid,N*N*sizeof(int));
+	memcpy(tdata->puzzle,grid_game,N*N*sizeof(int));
+    
 	},false);
         if(tdata->result_complexity >= tdata->complexity){
             break;
         }else{
-            free(grid_game);
+			free(grid_game);
             grid_reset(grid);
         }
     }
@@ -145,7 +117,6 @@ void * generate_game(void * arg){
 
 	//}
     WITH_MUTEX({
-    memcpy(tdata->puzzle,puzzle,N*N*sizeof(int));
     tdata->finish = nsecs();
     tdata->duration = tdata->finish - tdata->start;
     tdata->is_done = true;
@@ -157,7 +128,7 @@ void thread_data_to_json_object(rjson_t * json ,thread_data_t * data){
 	rjson_object_start(json);
 	rjson_kv_int(json,"id",data->id);
 	rjson_kv_int(json,"solved_count",data->solved_count);
-	rjson_kv_number(json,"steps_total",data->steps_total);
+	rjson_kv_number(json,"steps_total",data->steps_total + data->steps);
 	rjson_kv_number(json,"steps",data->steps);
 	rjson_kv_number(json,"result_initial_count",data->result_initial_count);
 	rjson_kv_duration(json,"start",data->start);
@@ -247,8 +218,10 @@ void http_response(rhttp_request_t * r, char * content){
 	close(r->c);
 }
 
-int request_handler_processes(rhttp_request_t*r){
-	if(!strncmp(r->path,"/processes",strlen("/processes"))){
+
+
+int request_handler_json_processes(rhttp_request_t*r){
+	if(!strncmp(r->path,"/json/processes",strlen("/json/processes"))){
 		WITH_MUTEX({
 		char * content = thread_data_to_json(serve_arguments.runners,serve_arguments.runner_count); // runner_status_to_string(serve_arguments.runners,serve_arguments.runner_count);
 		http_response(r,content);
@@ -260,6 +233,38 @@ int request_handler_processes(rhttp_request_t*r){
 	return 0;
 }
 
+char * statistics_to_json_object(serve_arguments_t * args, rjson_t * json ,thread_data_t * data){
+	ulong steps_total = 0;
+		ulong solved_total = 0;
+		nsecs_t longest_running = 0;
+		get_totals(args->runners, args->runner_count, &steps_total, &solved_total, &longest_running);
+			
+	rjson_object_start(json);
+	rjson_kv_string(json,"start",args->start_timestamp);
+	rjson_kv_number(json,"steps_total",steps_total);
+	rjson_kv_number(json,"solved_total",solved_total);
+	rjson_kv_number(json,"steps_per_puzzle",solved_total != 0 ? steps_total / (solved_total + args->runner_count) : 0);
+	rjson_kv_string(json,"longest_running",format_time(longest_running));
+	rjson_kv_string(json,"time_winner",format_time(args->time_winner));
+	rjson_kv_string(json,"puzzle_winner",grid_to_string(args->puzzle_winner));
+	rjson_kv_string(json,"solution_winner",grid_to_string(args->solution_winner));
+	rjson_object_close(json);
+	return json;
+}
+
+int request_handler_json_statistics(rhttp_request_t *r ){
+	serve_arguments_t args = *(serve_arguments_t *)r->context;
+	if(!strncmp(r->path, "/json/statistics",strlen("/json/statistics"))){
+		rjson_t * json = rjson();
+		statistics_to_json_object(&args,json,args.runners);
+		char * content = strdup(json->content);
+		rjson_free(json);
+		http_response(r,content);
+		free(content);
+		return 1;
+	}
+	return 0;
+}
 int request_handler_root(rhttp_request_t *r){
 	serve_arguments_t args = *(serve_arguments_t *)r->context;
 	if(!strcmp(r->path,"/")){
@@ -341,7 +346,8 @@ int request_handler(rhttp_request_t * r){
 	rhttp_request_handler_t request_handlers[] ={
 		request_handler_root,
 		request_handler_empty,
-		request_handler_processes,
+		request_handler_json_processes,
+		request_handler_json_statistics,
 		rhttp_file_request_handler,
 		request_handler_404,
 		NULL 

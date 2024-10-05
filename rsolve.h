@@ -178,4 +178,100 @@ unsigned int rsolve(int grid[RSOLVE_SIZE][RSOLVE_SIZE], unsigned long long *atte
     }
     return 0;
 }
+
+int ris_safe(int grid[RSOLVE_SIZE][RSOLVE_SIZE], int row, int col, int num)
+{
+	if (num == 0)
+		return true;
+	for (int x = 0; x < RSOLVE_SIZE; x++)
+	{
+
+		if (grid[row][x] == num && col != x)
+		{
+			return false;
+		}
+	}
+	for (int x = 0; x < RSOLVE_SIZE; x++)
+	{
+		if (grid[x][col] == num && row != x)
+		{
+
+			return false;
+		}
+	}
+
+	// Check box
+	int startRow = row - row % (RSOLVE_SIZE / 3), startCol = col - col % (RSOLVE_SIZE / 3);
+	for (int i = 0; i < RSOLVE_SIZE / 3; i++)
+	{
+		for (int j = 0; j < RSOLVE_SIZE / 3; j++)
+		{
+			if (grid[i + startRow][j + startCol] == num && row != i + startRow && col != j + startCol)
+			{
+
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+void grid_set_random_free_cell(int grid[RSOLVE_SIZE][RSOLVE_SIZE]){
+    int rn, row, col;
+    
+    while(true){
+    rn = (rand() % RSOLVE_SIZE) + 1;
+    row = rand() % RSOLVE_SIZE;
+    col = rand() % RSOLVE_SIZE;
+    
+    while(grid[row][col] != 0){
+        row = rand() % RSOLVE_SIZE;
+        col = rand() % RSOLVE_SIZE;
+    }
+   // printf("CHECK %d:%d:%d\RSOLVE_SIZE",row,col,rn);
+        if(ris_safe(grid,row,col, rn)){
+           // printf("CHECKED\RSOLVE_SIZE");
+             grid[row][col] = rn;
+             break;
+        }
+    }
+    
+}
+
+void grid_set_random_free_cells(int * grid, unsigned int count){
+    //grid[rand() % RSOLVE_SIZE][rand() % RSOLVE_SIZE] = rand() % RSOLVE_SIZE;
+    for (uint i =0 ; i < count; i++){
+        grid_set_random_free_cell(grid);
+    }
+}
+bool rvalidate_grid(int grid[RSOLVE_SIZE][RSOLVE_SIZE])
+{
+	for (int row = 0; row < RSOLVE_SIZE; row++)
+	{
+		for (int col = 0; col < RSOLVE_SIZE; col++)
+		{
+			if (!ris_safe(grid, row, col, grid[row][col]))
+			{
+				return false;
+			}
+		}
+	}
+	return true;
+}
+int * rgenerate_puzzle(unsigned int count){
+    int * grid = (int *)malloc(sizeof(int)*RSOLVE_SIZE*RSOLVE_SIZE);
+    while(true){
+        memset(grid,0,RSOLVE_SIZE*RSOLVE_SIZE*sizeof(int));
+        
+        grid_set_random_free_cells(grid, count);
+        
+        //print_grid(grid,true);
+            if(rvalidate_grid(grid))
+            return grid;
+        }
+    
+    return NULL;
+}
+
 #endif

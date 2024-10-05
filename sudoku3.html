@@ -1,0 +1,83 @@
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script type="text/javascript" src="sudoku.js"></script>
+    <style>
+        body {
+
+            background-color: #222;
+        }
+
+        .sudoku {
+            float: left;
+            color: hwb(0 20% 80%);
+            background-color: blue;
+        }
+    </style>
+    <script type="text/javascript">
+        const renderPuzzleFromString = (str, readOnly, size, darkMode) => {
+            darkMode = true
+            const sudoku = document.createElement('my-sudoku')
+            sudoku.setAttribute('puzzle', str ? str : 'generate')
+            if(readOnly)
+            sudoku.setAttribute('read-only', 'true')
+            sudoku.classList.add('sudoku')
+            if(darkMode){
+                sudoku.classList.add('sudoku-dark')
+            }
+            document.body.appendChild(sudoku);
+            const id = generateIdByPosition(sudoku);
+            sudoku.id = id
+            return sudoku
+        }
+
+        const renderPuzzles = (readOnly,size,darkMode) => {
+            renderPuzzleFromString(null,readOnly, size, darkMode)
+
+        }
+
+        document.addEventListener('DOMContentLoaded', (e) => {
+            let size = randInt(4, 20);
+            let darkMode = randInt(0,1);
+            renderPuzzleFromString(`0  0  8  0  9  0  0  0  0 
+ 0  9  0  0  0  7  0  0  7 
+ 0  0  0  0  2  0  0  0  0 
+ 0  0  3  0  0  0  0  0  0 
+ 5  0  0  0  8  0  0  0  0 
+ 0  0  6  0  0  0  0  0  0 
+ 0  0  0  0  0  3  9  0  0 
+ 9  1  0  0  0  0  0  0  0 
+ 0  0  0  0  1  0  0  0  0 `, true, size, darkMode)
+            renderPuzzleFromString(`2  3  8  1  9  7  4  5  6 
+        4  9  1  3  5  0  2  8  7 
+        6  5  0  0  0  0  1  3  9 
+        1  2  3  0  4  9  0  6  8 
+        5  7  9  6  8  1  3  2  4 
+        8  4  0  7  3  2  0  9  1 
+        7  8  4  2  6  3  9  1  5 
+        9  1  2  8  7  5  0  4  3 
+        3  6  5  9  1  4  8  7  0
+       `, true, size, darkMode)
+            renderPuzzleFromString(` 0  0  8  0  9  0  0  0  0 
+        0  9  0  0  0  0  0  0  7 
+        0  0  0  0  2  0  0  0  0 
+        0  0  3  0  0  0  0  0  0 
+        5  0  0  0  8  0  0  0  0 
+        0  0  6  0  0  0  0  0  0 
+        0  0  0  0  0  3  9  0  0 
+        9  1  0  0  0  0  0  0  0 
+        0  0  0  0  1  0  0  0  0`, size, darkMode)
+            for (let i = 0; i < 30; i++) {
+                renderPuzzles(true, size, darkMode)
+            }
+        });
+    </script>
+</head>
+
+<body>
+
+</body>
+
+</html>

@@ -1,3 +1,6 @@
+#ifndef SUDOKU_H
+#define SUDOKU_H
+
 #include "rlib.h"
 #include "rsolve.h"
 #include <stdio.h>
@@ -244,3 +247,6 @@ unsigned int solve(int grid[N][N],bool draw) {
     unsigned long long attempts = 0;
     return _solve2(grid,&attempts, draw);
 }
+
+#endif
+

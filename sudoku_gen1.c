@@ -1,8 +1,8 @@
+#include "rlib.h"
 #include "sudoku.h"
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
-#include <rlib.h>
 #include <pthread.h>
 #include "footer.h"
 

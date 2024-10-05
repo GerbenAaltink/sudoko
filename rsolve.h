@@ -5,6 +5,8 @@
 #define RSOLVE_SIZE 9
 #endif 
 
+#include "rlib.h"
+
 unsigned int rand_int(int min, int max){
     return rand() % (max - min + 1) + min;
 }
@@ -39,16 +41,16 @@ int rdigitcmp(const void *a, const void *b) {
 }
 
 
-uint count_neighbors(int grid[RSOLVE_SIZE][RSOLVE_SIZE], int row, int col) {
-    unsigned int count = 0;
+double count_neighbors(int grid[RSOLVE_SIZE][RSOLVE_SIZE], int row, int col) {
+    double count = 0.0;
     for(int i = 0; i < row; i++){
         for(int j = 0; j < RSOLVE_SIZE; j++){
             if(grid[row][j] != 0 && j != col)
-                count++;
+                count += 1; //grid[row][j].initial ? 1.1 : 1.0;
         }
         for(int j = 0; j < RSOLVE_SIZE; j++){
             if(grid[j][col] != 0 && j != row)
-                count++;
+                count += 1; //grid[j][col].initial ? 1.1 : 1.0;
         }
     }
     return count;
@@ -56,12 +58,12 @@ uint count_neighbors(int grid[RSOLVE_SIZE][RSOLVE_SIZE], int row, int col) {
 
 
 bool get_easiest_cell2(int grid[RSOLVE_SIZE][RSOLVE_SIZE], unsigned int *easy_row, unsigned int *easy_col){
-	int highest_neighbor_count = 0;
+	double highest_neighbor_count = 0;
 	bool found = false;
 	for(int row = 0; row < RSOLVE_SIZE; row++){
 	{
 		for(int col = 0; col < RSOLVE_SIZE; col++){
-			int neighbor_count = count_neighbors(grid,row,col);
+			double neighbor_count = count_neighbors(grid,row,col);
 			if(neighbor_count > highest_neighbor_count){
 				highest_neighbor_count = neighbor_count;
 				*easy_row = row;
@@ -133,14 +135,14 @@ int rsolve_check(int grid[RSOLVE_SIZE][RSOLVE_SIZE], int row, int col, int num)
 }
 
 bool get_easiest_cell(int grid[RSOLVE_SIZE][RSOLVE_SIZE], unsigned int * easy_row, unsigned int * easy_col){
-    unsigned int easy_neighbor_count = 0;
+    double easy_neighbor_count = 0;
     bool found = true;
     for(int row = 0; row < RSOLVE_SIZE; row++){
         for (int col = 0; col < RSOLVE_SIZE; col++){
             if(grid[row][col] != 0){
                 continue;
             }
-            uint ncount = count_neighbors(grid,row,col);
+            double ncount = count_neighbors(grid,row,col);
             if(easy_neighbor_count <= ncount){
                 easy_neighbor_count = ncount;
                 *easy_row = row;

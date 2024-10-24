@@ -5,7 +5,7 @@
 #include "rsolve.h"
 #define N 9
 
-
+// VERSION 1
 
 
 
@@ -133,7 +133,7 @@ bool grid_read(int grid[N][N])
 		for (int col = 0; col < N; col++)
 		{
 			grid[row][col] = get_next_int(stdin);
-			clear();
+            clear();
 			print_grid(grid);
 			if (grid[row][col] == -1)
 			{
@@ -202,9 +202,10 @@ bool is_empty(int grid[N][N])
 
 
 
-int main()
+int main(int argc, char *argv[])
 {
-
+    printf("Usage: ./solve [auto (optional)]\n");
+    printf("       run without parameters to provide your own grid. Many formats supported, XML, HTML, JSON, NO DELIMITER, DELMITED BY ANYTHING.\n");
 RBENCH(1000000,{
          int * g = rgenerate_puzzle(17);
 		 free(g);  
@@ -219,7 +220,7 @@ RBENCH(1000000,{
 	print_grid(ex_grid);
 	// grid[8][8] = 9;
 	//	grid[8][8] = 8;
-	while (true)
+	while (argc != 2)
 	{
 		if (is_empty(grid))
 			while (!grid_read(grid))
@@ -235,8 +236,11 @@ RBENCH(1000000,{
 	}
 	clear();
 	int grid_original[N][N];
+    if(argc == 2){
+        memcpy(grid, ex_grid, N * N * sizeof(int));
+    }
 	memcpy(grid_original, grid, N * N * sizeof(int));
-	printf("Grid valid. Solving...\n");
+	printf("Grid valid. Solving...\n\n");
 	unsigned long long steps = 0;
 	nsecs_t start = nsecs();
 	RBENCH(1, {
@@ -244,13 +248,16 @@ RBENCH(1000000,{
 		steps = 0;
 		if (rsolve(grid, &steps))
 		{
-			print_grid(grid);
-			printf("%s", "1");
+            printf("original:\n");
+			print_grid(grid_original);
+            printf("\ncompleted:\n");
+            print_grid(grid);
+			printf("\n");
 		}
 		
 		
 	});
-	printf("Steps: %u\n", steps);;
+    printf("Steps: %u\n", steps);;
 		
 
 	RBENCH(1, {

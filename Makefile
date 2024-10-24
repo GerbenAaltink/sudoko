@@ -8,6 +8,16 @@ gen1:
 	gcc sudoku_gen1.c -o sudoku_gen1 -Wall -Wextra -Ofast
 	./sudoku_gen1
 
+solve: solve.c rlib.h
+	gcc solve.c -Ofast -o solve
+	$(MAKE) solve_auto
+
+solve_manual:
+	./solve 
+
+solve_auto:
+	./solve auto
+
 coverage:
 	gcc -pg -fprofile-arcs -ftest-coverage -g -o sudoku sudoku2.c
 	./sudoku

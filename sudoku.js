@@ -68,6 +68,7 @@ class Col extends EventHandler {
     id = 0
     values = []
     initial = false
+    _marked = false
     row = null
     index = 0
     valid = true
@@ -83,6 +84,12 @@ class Col extends EventHandler {
                 field.row.index == this.row.index && field.value == this._value)
 
         }).filter(field => field != this).length == 0
+    }
+    mark() {
+        this.marked = true 
+    }
+    unmark() {
+        this.marked = false
     }
     select() {
         this.selected = true
@@ -150,6 +157,17 @@ class Col extends EventHandler {
             this.emit('update', this);
         }
     }
+    get marked() {
+        return this._marked
+    }
+    set marked(val){
+        if(val != this._marked){
+            this._marked = val 
+            if(this.row.puzzle.initalized){
+                this.emit('update',this)
+            }
+        }
+    }
     constructor(row) {
         super()
         this.row = row
@@ -158,6 +176,7 @@ class Col extends EventHandler {
         this.initial = false
         this.selected = false
         this._value = 0;
+        this.marked = false
         this.valid = true
     }
     update() {
@@ -165,6 +184,9 @@ class Col extends EventHandler {
     }
     toggleSelected() {
         this.selected = !this.selected 
+    }
+    toggleMarked() {
+        this.marked = !this.marked 
     }
     get data() {
         return {
@@ -176,7 +198,8 @@ class Col extends EventHandler {
             col: this.index,
             valid: this.valid,
             initial: this.initial,
-            selected: this.selected
+            selected: this.selected,
+            marked: this.marked 
         }
     }
     toString() {
@@ -293,6 +316,7 @@ class Puzzle extends EventHandler {
         this.fields.forEach(field => {
             field.initial = false
             field.selected = false
+            field.marked = false
             field.value = 0
         })
         this.hash = 0
@@ -313,6 +337,9 @@ class Puzzle extends EventHandler {
     }
     get selected() {
         return this.fields.filter(field => field.selected)
+    }
+    get marked(){
+        return this.fields.filter(field=>field.marked)
     }
     loadString(content) {
         this.emit('parsing', this)
@@ -592,6 +619,9 @@ class Sudoku extends HTMLElement {
         .sudoku-field-selected {
             background-color: lightgreen;
         }
+        .soduku-field-marked {
+            background-color: blue;
+        }
         .sudoku-field-invalid {
             color: red;
         }
@@ -735,6 +765,20 @@ class Sudoku extends HTMLElement {
                         field.value = Number(e.key)
                     })
                 });
+            } else if(e.key == 'm'){
+                let fields = [];
+                puzzle.update((target) => {
+                    target.selected.forEach(field => {
+                        field.selected = false;
+                        fields.push(field)
+                    });
+            });
+            puzzle.update((target)=>{
+                fields.forEach((field)=>{
+                    field.toggleMarked();
+                })
+            });
+            puzzle.emit('update',puzzle);
             }
         })
     }
@@ -756,6 +800,8 @@ class Sudoku extends HTMLElement {
         fieldElement.classList.remove('sudoku-field-empty')
         fieldElement.classList.remove('sudoku-field-invalid')
         fieldElement.classList.remove('sudoku-field-initial')
+        fieldElement.classList.remove('sudoku-field-marked')
+        console.info('Removed marked class');
         fieldElement.innerHTML = field.value ? field.value.toString() : '&nbsp;'
         
         if (field.selected) {
@@ -770,6 +816,10 @@ class Sudoku extends HTMLElement {
         }
         if(field.initial){
             fieldElement.classList.add('sudoku-field-initial')
+        }
+        if(field.marked){
+            fieldElement.classList.add('sudoku-field-marked')
+            console.info("added marked lcass")
         }
 
     }

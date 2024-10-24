@@ -4,8 +4,11 @@
 #ifndef RSOLVE_SIZE 
 #define RSOLVE_SIZE 9
 #endif 
-
 #include "rlib.h"
+#include <stdbool.h>
+#include <stdlib.h>
+
+typedef unsigned long ulong;
 
 unsigned int rand_int(int min, int max){
     return rand() % (max - min + 1) + min;
